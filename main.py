@@ -19,6 +19,20 @@ def verify_webhook(
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     data = await request.json()
-    print("EVENTO RECEBIDO:")
-    print(data)
+
+    try:
+        value = data["entry"][0]["changes"][0]["value"]
+
+        if "messages" in value:
+            msg = value["messages"][0]
+            phone = msg["from"]
+            text = msg.get("text", {}).get("body", "")
+
+            print(f"Telefone: {phone}")
+            print(f"Mensagem: {text}")
+
+    except Exception as e:
+        print("Erro ao processar webhook:", e)
+        print(data)
+
     return {"status": "ok"}

@@ -1,42 +1,36 @@
-from typing import Annotated
 import os
 import requests
-
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.responses import PlainTextResponse
+from typing import Annotated
+from collections import defaultdict, deque
+
 from openai import OpenAI
 
 app = FastAPI()
 
 # =========================
-# Variáveis de ambiente
+# ENV
 # =========================
-#VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
 
-#if not VERIFY_TOKEN:
-    #raise ValueError("VERIFY_TOKEN não configurado")
-
-if not WHATSAPP_TOKEN:
-    raise ValueError("WHATSAPP_TOKEN não configurado")
-
-if not PHONE_NUMBER_ID:
-    raise ValueError("PHONE_NUMBER_ID não configurado")
-
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY não configurado")
-
-if not VECTOR_STORE_ID:
-    raise ValueError("VECTOR_STORE_ID não configurado")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# Prompt seguro
+# MEMÓRIA CONVERSA
 # =========================
+
+conversation_memory = defaultdict(lambda: deque(maxlen=4))
+
+# =========================
+# PROMPT
+# =========================
+
 SAFE_SYSTEM_PROMPT = """
 Você é um assistente educativo em puericultura e amamentação.
 
@@ -47,240 +41,287 @@ Seu tom deve ser:
 - calmo
 - claro
 - respeitoso
-- humano, sem soar robótico
+- humano
 
 Regras obrigatórias:
-- Responda apenas com base no conteúdo recuperado dos arquivos.
+
+- Responda principalmente com base nos documentos recuperados.
+- Pode usar conhecimento médico geral confiável se necessário.
 - Não faça diagnóstico.
 - Não prescreva medicamentos.
 - Não substitua avaliação médica.
-- Não invente informações fora dos arquivos.
-- Se a base recuperada for insuficiente, diga isso claramente.
-- Use português do Brasil.
-- Priorize linguagem simples e reconfortante.
-- Sempre valide brevemente a preocupação do cuidador antes de orientar.
-- Evite soar fria, seca ou excessivamente técnica.
-- Seja breve, mas gentil.
+- Se houver sinais de alerta, oriente procurar atendimento médico.
+- Use linguagem simples e reconfortante.
+- Seja breve mas gentil.
 """
 
 # =========================
-# Guardrails clínicos
+# RED FLAGS
 # =========================
+
 EMERGENCY_FLAGS = [
     "não respira",
-    "nao respira",
-    "dificuldade para respirar",
-    "falta de ar",
     "convuls",
+    "inconsciente",
     "roxo",
     "arroxeado",
-    "inconsciente",
 ]
 
-REFER_MEDICAL_CARE_FLAGS = [
+MEDICAL_FLAGS = [
     "febre",
-    "muito molinho",
     "muito sonolento",
     "não mama",
-    "nao mama",
-    "não quer mamar",
-    "nao quer mamar",
     "desidrat",
-    "sem xixi",
-    "pouco xixi",
-    "sangue nas fezes",
     "vomitando tudo",
-    "vomita tudo",
-    "pele muito amarela",
 ]
 
-def classify_risk(text: str) -> str:
+def classify_risk(text: str):
+
     t = text.lower()
 
     if any(flag in t for flag in EMERGENCY_FLAGS):
-        return "EMERGENCY_NOW"
+        return "EMERGENCY"
 
-    if any(flag in t for flag in REFER_MEDICAL_CARE_FLAGS):
-        return "REFER_MEDICAL_CARE"
+    if any(flag in t for flag in MEDICAL_FLAGS):
+        return "MEDICAL"
 
-    return "EDUCATIONAL_OK"
+    return "SAFE"
 
-def emergency_message() -> str:
-    return (
-        "Entendo sua preocupação. Pelo que você descreveu, isso pode ser uma situação de urgência. "
-        "Procure atendimento médico de emergência imediatamente."
-    )
-
-def medical_referral_message() -> str:
-    return (
-        "Entendo sua preocupação. Pelo que você descreveu, pode haver um sinal de alerta. "
-        "O mais seguro é procurar avaliação médica o quanto antes. "
-        "Se houver dificuldade para respirar, sonolência excessiva, febre, piora "
-        "ou recusa para mamar, busque atendimento imediatamente."
-    )
 
 # =========================
-# WhatsApp
+# WHATSAPP
 # =========================
-def send_whatsapp_text(to: str, body: str) -> None:
+
+def send_whatsapp_text(phone, body):
+
     url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json",
     }
+
     payload = {
         "messaging_product": "whatsapp",
-        "to": to,
+        "to": phone,
         "type": "text",
         "text": {"body": body},
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    print("WHATSAPP SEND STATUS:", response.status_code)
-    print("WHATSAPP SEND BODY:", response.text)
+    requests.post(url, headers=headers, json=payload, timeout=30)
 
-def send_typing_indicator(message_id: str) -> None:
-    """
-    Marca a mensagem como lida e exibe o indicador de 'digitando'
-    para casos seguros, antes da consulta à base + IA.
-    """
+
+def send_typing_indicator(message_id):
+
     url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json",
     }
+
     payload = {
         "messaging_product": "whatsapp",
         "status": "read",
         "message_id": message_id,
-        "typing_indicator": {
-            "type": "text"
-        }
+        "typing_indicator": {"type": "text"},
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    print("TYPING STATUS:", response.status_code)
-    print("TYPING BODY:", response.text)
+    requests.post(url, headers=headers, json=payload, timeout=30)
+
 
 # =========================
-# OpenAI + file_search
+# QUERY REWRITE
 # =========================
-def generate_safe_reply(user_text: str) -> str:
-    try:
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=[
-                {"role": "system", "content": SAFE_SYSTEM_PROMPT},
-                {"role": "user", "content": user_text},
-            ],
-            tools=[
-                {
-                    "type": "file_search",
-                    "vector_store_ids": [VECTOR_STORE_ID],
-                    "max_num_results": 3,
-                }
-            ],
-        )
 
-        answer = response.output_text.strip()
+def rewrite_query(question):
 
-        # Pós-checagem simples
-        lowered = answer.lower()
-        blocked_terms = ["diagnóstico", "diagnostico", "prescrev", "medicamento"]
+    prompt = f"""
+Reescreva a pergunta abaixo de forma mais completa para busca em documentos
+sobre puericultura e amamentação.
 
-        if any(term in lowered for term in blocked_terms):
-            return (
-                "Quero te ajudar da forma mais segura possível. "
-                "Posso oferecer apenas orientação educativa geral com base nos materiais aprovados. "
-                "Se houver preocupação clínica, o mais seguro é procurar avaliação médica."
-            )
+Pergunta original:
+{question}
+"""
 
-        return answer
+    r = client.responses.create(
+        model="gpt-5-mini",
+        input=prompt
+    )
 
-    except Exception as e:
-        print("OPENAI ERROR:", str(e))
-        return (
-            "Entendo sua preocupação. No momento só consigo oferecer orientação educativa geral limitada. "
-            "Se houver febre, dificuldade para respirar, piora, sonolência excessiva "
-            "ou recusa para mamar, procure atendimento médico."
-        )
+    return r.output_text.strip()
+
 
 # =========================
-# Webhook GET (validação Meta)
+# VECTOR SEARCH
 # =========================
+
+def vector_search(query):
+
+    r = client.vector_stores.search(
+        vector_store_id=VECTOR_STORE_ID,
+        query=query,
+        max_num_results=8
+    )
+
+    docs = []
+
+    for item in r.data:
+        docs.append(item.content[0].text)
+
+    return docs
+
+
+# =========================
+# RERANK
+# =========================
+
+def rerank_docs(question, docs):
+
+    joined = "\n\n".join(docs)
+
+    prompt = f"""
+Pergunta do usuário:
+{question}
+
+Trechos de documentos:
+
+{joined}
+
+Escolha os 5 trechos mais relevantes para responder a pergunta.
+"""
+
+    r = client.responses.create(
+        model="gpt-5-mini",
+        input=prompt
+    )
+
+    return r.output_text
+
+
+# =========================
+# RESPOSTA FINAL
+# =========================
+
+def generate_answer(phone, question):
+
+    query = rewrite_query(question)
+
+    docs = vector_search(query)
+
+    context = rerank_docs(query, docs)
+
+    history = list(conversation_memory[phone])
+
+    messages = [
+        {"role": "system", "content": SAFE_SYSTEM_PROMPT}
+    ]
+
+    messages += history
+
+    messages.append({
+        "role": "user",
+        "content": f"""
+Documentos relevantes:
+
+{context}
+
+Pergunta:
+{question}
+"""
+    })
+
+    r = client.responses.create(
+        model="gpt-5-mini",
+        input=messages
+    )
+
+    answer = r.output_text.strip()
+
+    conversation_memory[phone].append({
+        "role": "user",
+        "content": question
+    })
+
+    conversation_memory[phone].append({
+        "role": "assistant",
+        "content": answer
+    })
+
+    return answer
+
+
+# =========================
+# WEBHOOK VERIFY
+# =========================
+
 @app.get("/webhook", response_class=PlainTextResponse)
 def verify_webhook(
     hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
     hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
 ):
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN and hub_challenge:
+
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return hub_challenge
 
-    return PlainTextResponse("Forbidden", status_code=403)
+    return "Forbidden"
+
 
 # =========================
-# Webhook POST (mensagens)
+# WEBHOOK MESSAGES
 # =========================
+
 @app.post("/webhook")
 async def receive_webhook(request: Request):
+
     data = await request.json()
-    print("EVENTO:", data)
 
     try:
-        entry = data.get("entry", [])
-        if not entry:
+
+        entry = data["entry"][0]["changes"][0]["value"]
+
+        if "messages" not in entry:
             return {"status": "ok"}
 
-        changes = entry[0].get("changes", [])
-        if not changes:
-            return {"status": "ok"}
+        msg = entry["messages"][0]
 
-        value = changes[0].get("value", {})
-
-        # Ignora eventos de status
-        if "statuses" in value:
-            print("STATUS EVENT:", value["statuses"])
-            return {"status": "ok"}
-
-        if "messages" not in value:
-            return {"status": "ok"}
-
-        msg = value["messages"][0]
-
-        # Trata apenas texto no MVP
-        if msg.get("type") != "text":
-            print("Mensagem ignorada. Tipo não suportado:", msg.get("type"))
+        if msg["type"] != "text":
             return {"status": "ok"}
 
         phone = msg["from"]
         text = msg["text"]["body"]
         message_id = msg["id"]
 
-        print("PHONE:", phone)
-        print("TEXT:", text)
-
-        # Guardrail antes da IA
         risk = classify_risk(text)
-        print("RISK:", risk)
 
-        # Para red flags, responde imediatamente sem digitação
-        if risk == "EMERGENCY_NOW":
-            send_whatsapp_text(phone, emergency_message())
+        if risk == "EMERGENCY":
+
+            send_whatsapp_text(
+                phone,
+                "Isso pode ser uma situação de emergência. Procure atendimento médico imediatamente."
+            )
+
             return {"status": "ok"}
 
-        if risk == "REFER_MEDICAL_CARE":
-            send_whatsapp_text(phone, medical_referral_message())
+        if risk == "MEDICAL":
+
+            send_whatsapp_text(
+                phone,
+                "Entendo sua preocupação. Pode ser importante procurar avaliação médica."
+            )
+
             return {"status": "ok"}
 
-        # Para casos seguros, mostra "digitando" antes de consultar a base
+        # typing indicator apenas para casos seguros
         send_typing_indicator(message_id)
 
-        # Caso seguro: usa OpenAI + file_search
-        reply = generate_safe_reply(text)
-        send_whatsapp_text(phone, reply)
+        answer = generate_answer(phone, text)
+
+        send_whatsapp_text(phone, answer)
 
     except Exception as e:
-        print("WEBHOOK ERROR:", str(e))
+
+        print("ERRO:", e)
 
     return {"status": "ok"}

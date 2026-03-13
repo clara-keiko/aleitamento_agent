@@ -64,7 +64,7 @@ Seu tom deve ser:
 - humano, sem soar robótico
 
 Regras obrigatórias:
-- Responda apenas com base no conteúdo recuperado dos arquivos.
+- priorize o conteúdo recuperado dos arquivos.
 - Não faça diagnóstico.
 - Não prescreva medicamentos.
 - Não substitua avaliação médica.
@@ -74,7 +74,6 @@ Regras obrigatórias:
 - Priorize linguagem simples e reconfortante.
 - Sempre valide brevemente a preocupação do cuidador antes de orientar.
 - Evite soar fria, seca ou excessivamente técnica.
-- Responda em no máximo 3 frases curtas.
 - Evite explicações longas.
 - Seja breve, mas gentil.
 """
@@ -149,7 +148,7 @@ Mensagem:
 {text}
 """
     r = client.responses.create(
-        model="gpt-4.1-mini",
+        model="gpt-5-mini",
         input=prompt,
         max_output_tokens=20,
     )
@@ -220,7 +219,7 @@ Resposta:
 """
 
     r = client.responses.create(
-        model="gpt-4.1-mini",
+        model="gpt-5-mini",
         input=prompt,
         max_output_tokens=120,
     )
@@ -229,7 +228,7 @@ Resposta:
 
 def generate_answer(question: str) -> str:
     r = client.responses.create(
-        model="gpt-4.1",
+        model="gpt-5",
         input=[
             {"role": "system", "content": SAFE_SYSTEM_PROMPT},
             {"role": "user", "content": question},
@@ -237,8 +236,7 @@ def generate_answer(question: str) -> str:
         tools=[
             {
                 "type": "file_search",
-                "vector_store_ids": [VECTOR_STORE_ID],
-                "max_num_results": 6,
+                "vector_store_ids": [VECTOR_STORE_ID]
             }
         ],
         max_output_tokens=120,

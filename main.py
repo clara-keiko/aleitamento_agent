@@ -3,58 +3,125 @@ import requests
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import PlainTextResponse
 from typing import Annotated
-from collections import defaultdict, deque
 from openai import OpenAI
 
 app = FastAPI()
 
-#VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+# =========================
+# ENV
+# =========================
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID")
 
+if not VERIFY_TOKEN:
+    raise ValueError("VERIFY_TOKEN não configurado")
+
+if not WHATSAPP_TOKEN:
+    raise ValueError("WHATSAPP_TOKEN não configurado")
+
+if not PHONE_NUMBER_ID:
+    raise ValueError("PHONE_NUMBER_ID não configurado")
+
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY não configurado")
+
+if not VECTOR_STORE_ID:
+    raise ValueError("VECTOR_STORE_ID não configurado")
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-memory = defaultdict(lambda: deque(maxlen=4))
-
-
+# =========================
+# PROMPT
+# =========================
 SAFE_SYSTEM_PROMPT = """
-Você é um assistente educativo sobre bebês, amamentação e puericultura.
+Você é um assistente educativo em puericultura e amamentação.
 
-Tom:
-acolhedor, empático e claro.
+Seu tom deve ser:
+- acolhedor
+- empático
+- cordial
+- calmo
+- claro
+- respeitoso
+- humano, sem soar robótico
 
-Regras:
-- não faça diagnóstico
-- não prescreva medicamentos
-- não substitua avaliação médica
-- seja breve, mas sempre gentil
+Regras obrigatórias:
+- Responda apenas com base no conteúdo recuperado dos arquivos.
+- Não faça diagnóstico.
+- Não prescreva medicamentos.
+- Não substitua avaliação médica.
+- Não invente informações fora dos arquivos.
+- Se a base recuperada for insuficiente, diga isso claramente.
+- Use português do Brasil.
+- Priorize linguagem simples e reconfortante.
+- Sempre valide brevemente a preocupação do cuidador antes de orientar.
+- Evite soar fria, seca ou excessivamente técnica.
+- Responda em no máximo 3 frases curtas.
+- Evite explicações longas.
+- Seja breve, mas gentil.
 """
 
+# =========================
+# RED FLAGS
+# =========================
+EMERGENCY_FLAGS = [
+    "não respira",
+    "nao respira",
+    "dificuldade para respirar",
+    "falta de ar",
+    "convuls",
+    "roxo",
+    "arroxeado",
+    "inconsciente",
+]
 
-# -------------------------
-# RED FLAG
-# -------------------------
+REFER_MEDICAL_CARE_FLAGS = [
+    "febre",
+    "muito molinho",
+    "muito sonolento",
+    "não mama",
+    "nao mama",
+    "não quer mamar",
+    "nao quer mamar",
+    "desidrat",
+    "sem xixi",
+    "pouco xixi",
+    "sangue nas fezes",
+    "vomitando tudo",
+    "vomita tudo",
+    "pele muito amarela",
+]
 
-EMERGENCY = ["convuls", "não respira", "inconsciente"]
-
-def classify_risk(text):
-
+def classify_risk(text: str) -> str:
     t = text.lower()
 
-    if any(w in t for w in EMERGENCY):
-        return "emergency"
+    if any(flag in t for flag in EMERGENCY_FLAGS):
+        return "EMERGENCY_NOW"
 
-    return "safe"
+    if any(flag in t for flag in REFER_MEDICAL_CARE_FLAGS):
+        return "REFER_MEDICAL_CARE"
 
+    return "EDUCATIONAL_OK"
 
-# -------------------------
-# INTENT CLASSIFIER
-# -------------------------
+def emergency_message() -> str:
+    return (
+        "Entendo sua preocupação. Isso pode ser uma situação de urgência. "
+        "Procure atendimento médico de emergência imediatamente."
+    )
 
-def classify_intent(text):
+def medical_referral_message() -> str:
+    return (
+        "Entendo sua preocupação. Pode haver um sinal de alerta. "
+        "O mais seguro é procurar avaliação médica o quanto antes."
+    )
 
+# =========================
+# INTENT / SMALL TALK
+# =========================
+def classify_intent(text: str) -> str:
     prompt = f"""
 Classifique a mensagem em UMA categoria:
 
@@ -66,178 +133,172 @@ medical_question
 Mensagem:
 {text}
 """
+    r = client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt,
+        max_output_tokens=20
+    )
+    return r.output_text.strip().lower()
+
+def greeting_reply() -> str:
+    return "Oi! 😊 Posso ajudar com dúvidas sobre bebês, amamentação ou vacinas."
+
+def thanks_reply() -> str:
+    return "De nada! 😊 Se tiver outra dúvida, é só me chamar."
+
+def smalltalk_reply() -> str:
+    return "Pode me mandar sua dúvida sobre bebê, amamentação ou puericultura."
+
+# =========================
+# WHATSAPP
+# =========================
+def send_message(phone: str, text: str) -> None:
+    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone,
+        "type": "text",
+        "text": {"body": text},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    print("SEND STATUS:", response.status_code)
+    print("SEND BODY:", response.text)
+
+def typing_indicator(message_id: str) -> None:
+    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message_id,
+        "typing_indicator": {"type": "text"},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    print("TYPING STATUS:", response.status_code)
+    print("TYPING BODY:", response.text)
+
+# =========================
+# ANSWER GENERATION
+# =========================
+def shorten_answer(answer: str) -> str:
+    if len(answer) < 500:
+        return answer
+
+    prompt = f"""
+Resuma a resposta abaixo em no máximo 3 frases curtas, mantendo um tom acolhedor e claro.
+
+Resposta:
+{answer}
+"""
 
     r = client.responses.create(
         model="gpt-4.1-mini",
-        input=prompt
-    )
-
-    return r.output_text.strip().lower()
-
-
-# -------------------------
-# WHATSAPP
-# -------------------------
-
-def send_message(phone, text):
-
-    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
-
-    payload = {
-        "messaging_product":"whatsapp",
-        "to":phone,
-        "type":"text",
-        "text":{"body":text}
-    }
-
-    headers = {
-        "Authorization":f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type":"application/json"
-    }
-
-    requests.post(url,headers=headers,json=payload)
-
-
-def typing_indicator(message_id):
-
-    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
-
-    payload = {
-        "messaging_product":"whatsapp",
-        "status":"read",
-        "message_id":message_id,
-        "typing_indicator":{"type":"text"}
-    }
-
-    headers = {
-        "Authorization":f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type":"application/json"
-    }
-
-    requests.post(url,headers=headers,json=payload)
-
-
-# -------------------------
-# RAG
-# -------------------------
-
-def generate_answer(question):
-
-    r = client.responses.create(
-        model="gpt-5",
-        input=[
-            {"role":"system","content":SAFE_SYSTEM_PROMPT},
-            {"role":"user","content":question}
-        ],
-        tools=[
-            {
-                "type":"file_search",
-                "vector_store_ids":[VECTOR_STORE_ID],
-                "max_num_results":6
-            }
-        ]
+        input=prompt,
+        max_output_tokens=120
     )
 
     return r.output_text.strip()
 
+def generate_answer(question: str) -> str:
+    r = client.responses.create(
+        model="gpt-4.1",
+        input=[
+            {"role": "system", "content": SAFE_SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ],
+        tools=[
+            {
+                "type": "file_search",
+                "vector_store_ids": [VECTOR_STORE_ID],
+                "max_num_results": 6,
+            }
+        ],
+        max_output_tokens=120,
+    )
 
-# -------------------------
-# SHORT REPLIES
-# -------------------------
+    answer = r.output_text.strip()
+    answer = shorten_answer(answer)
+    return answer
 
-def greeting_reply():
-
-    return "Oi! 😊 Posso ajudar com dúvidas sobre bebês, amamentação ou vacinas."
-
-
-def thanks_reply():
-
-    return "De nada! 😊 Se tiver outra dúvida é só perguntar."
-
-
-def smalltalk_reply():
-
-    return "Se quiser, pode me perguntar algo sobre seu bebê."
-
-
-# -------------------------
+# =========================
 # WEBHOOK VERIFY
-# -------------------------
-
-@app.get("/webhook",response_class=PlainTextResponse)
+# =========================
+@app.get("/webhook", response_class=PlainTextResponse)
 def verify_webhook(
-    hub_mode: Annotated[str|None,Query(alias="hub.mode")]=None,
-    hub_verify_token: Annotated[str|None,Query(alias="hub.verify_token")]=None,
-    hub_challenge: Annotated[str|None,Query(alias="hub.challenge")]=None
+    hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
+    hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
+    hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
 ):
-
-    if hub_mode=="subscribe" and hub_verify_token==VERIFY_TOKEN:
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return hub_challenge
 
     return "Forbidden"
 
-
-# -------------------------
+# =========================
 # WEBHOOK MESSAGE
-# -------------------------
-
+# =========================
 @app.post("/webhook")
-async def receive(request:Request):
-
+async def receive(request: Request):
     data = await request.json()
 
     try:
-
-        value=data["entry"][0]["changes"][0]["value"]
+        value = data["entry"][0]["changes"][0]["value"]
 
         if "messages" not in value:
-            return {"status":"ok"}
+            return {"status": "ok"}
 
-        msg=value["messages"][0]
+        msg = value["messages"][0]
 
-        if msg["type"]!="text":
-            return {"status":"ok"}
+        if msg["type"] != "text":
+            return {"status": "ok"}
 
-        phone=msg["from"]
-        text=msg["text"]["body"]
-        message_id=msg["id"]
+        phone = msg["from"]
+        text = msg["text"]["body"]
+        message_id = msg["id"]
 
-        risk=classify_risk(text)
+        risk = classify_risk(text)
 
-        if risk=="emergency":
+        if risk == "EMERGENCY_NOW":
+            send_message(phone, emergency_message())
+            return {"status": "ok"}
 
-            send_message(
-                phone,
-                "Isso pode ser uma emergência. Procure atendimento médico imediatamente."
-            )
+        if risk == "REFER_MEDICAL_CARE":
+            send_message(phone, medical_referral_message())
+            return {"status": "ok"}
 
-            return {"status":"ok"}
+        intent = classify_intent(text)
 
-        intent=classify_intent(text)
+        if intent == "greeting":
+            send_message(phone, greeting_reply())
+            return {"status": "ok"}
 
-        if intent=="greeting":
+        if intent == "thanks":
+            send_message(phone, thanks_reply())
+            return {"status": "ok"}
 
-            send_message(phone,greeting_reply())
-            return {"status":"ok"}
-
-        if intent=="thanks":
-
-            send_message(phone,thanks_reply())
-            return {"status":"ok"}
-
-        if intent=="smalltalk":
-
-            send_message(phone,smalltalk_reply())
-            return {"status":"ok"}
+        if intent == "smalltalk":
+            send_message(phone, smalltalk_reply())
+            return {"status": "ok"}
 
         typing_indicator(message_id)
 
-        answer=generate_answer(text)
-
-        send_message(phone,answer)
+        answer = generate_answer(text)
+        send_message(phone, answer)
 
     except Exception as e:
+        print("ERRO:", e)
 
-        print("ERRO:",e)
-
-    return {"status":"ok"}
+    return {"status": "ok"}

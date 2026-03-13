@@ -11,14 +11,14 @@ app = FastAPI()
 # =========================
 # Variáveis de ambiente
 # =========================
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
+#VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
 
-if not VERIFY_TOKEN:
-    raise ValueError("VERIFY_TOKEN não configurado")
+#if not VERIFY_TOKEN:
+    #raise ValueError("VERIFY_TOKEN não configurado")
 
 if not WHATSAPP_TOKEN:
     raise ValueError("WHATSAPP_TOKEN não configurado")

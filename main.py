@@ -3,6 +3,7 @@ import time
 from typing import Annotated, Optional
 from collections import defaultdict
 import os
+import re
 import requests
 import threading
 
@@ -160,18 +161,45 @@ Em caso de emergência, oriente a buscar atendimento imediato.
 # =========================
 # WhatsApp API Functions
 # =========================
+MAX_WHATSAPP_TEXT_LENGTH = 4096
+
+
+def normalize_phone(phone: str) -> str:
+    """Mantém apenas dígitos no número de telefone."""
+    return re.sub(r"\D", "", phone or "")
+
+
+def sanitize_whatsapp_text(text: str) -> str:
+    """Garante texto válido para a API do WhatsApp."""
+    clean_text = (text or "").strip()
+    if not clean_text:
+        return "Desculpe, ocorreu um erro ao gerar a resposta."
+
+    if len(clean_text) > MAX_WHATSAPP_TEXT_LENGTH:
+        return clean_text[: MAX_WHATSAPP_TEXT_LENGTH - 3] + "..."
+
+    return clean_text
+
+
 def send_whatsapp_text(phone: str, text: str) -> bool:
     """Envia mensagem de texto via WhatsApp."""
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    normalized_phone = normalize_phone(phone)
+    message_text = sanitize_whatsapp_text(text)
+
+    if not normalized_phone:
+        logger.error("Failed to send message: invalid phone number")
+        return False
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
     payload = {
         "messaging_product": "whatsapp",
-        "to": phone,
+        "to": normalized_phone,
         "type": "text",
-        "text": {"body": text}
+        "text": {"body": message_text}
     }
     
     try:
@@ -179,6 +207,10 @@ def send_whatsapp_text(phone: str, text: str) -> bool:
         response.raise_for_status()
         logger.info(f"Message sent to {phone[-4:]}")
         return True
+    except requests.HTTPError as e:
+        response_body = e.response.text if e.response is not None else ""
+        logger.error(f"Failed to send message: {e} | response: {response_body}")
+        return False
     except requests.RequestException as e:
         logger.error(f"Failed to send message: {e}")
         return False

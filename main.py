@@ -1,5 +1,6 @@
 import os
 import requests
+from collections import deque
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import PlainTextResponse
 from typing import Annotated
@@ -10,31 +11,42 @@ app = FastAPI()
 # =========================
 # ENV
 # =========================
-#VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID")
 
-#if not VERIFY_TOKEN:
-    #raise ValueError("VERIFY_TOKEN não configurado")
-
+if not VERIFY_TOKEN:
+    raise ValueError("VERIFY_TOKEN não configurado")
 if not WHATSAPP_TOKEN:
     raise ValueError("WHATSAPP_TOKEN não configurado")
-
 if not PHONE_NUMBER_ID:
     raise ValueError("PHONE_NUMBER_ID não configurado")
-
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY não configurado")
-
 if not VECTOR_STORE_ID:
     raise ValueError("VECTOR_STORE_ID não configurado")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Evita responder duas vezes ao mesmo evento
+# =========================
+# LOOP PROTECTION
+# =========================
 processed_message_ids = set()
+processed_message_queue = deque(maxlen=1000)
+
+def mark_processed(message_id: str) -> bool:
+    if message_id in processed_message_ids:
+        return False
+
+    if len(processed_message_queue) == processed_message_queue.maxlen:
+        old = processed_message_queue.popleft()
+        processed_message_ids.discard(old)
+
+    processed_message_queue.append(message_id)
+    processed_message_ids.add(message_id)
+    return True
 
 # =========================
 # PROMPT
@@ -139,7 +151,7 @@ Mensagem:
     r = client.responses.create(
         model="gpt-4.1-mini",
         input=prompt,
-        max_output_tokens=20
+        max_output_tokens=20,
     )
     return r.output_text.strip().lower()
 
@@ -210,7 +222,7 @@ Resposta:
     r = client.responses.create(
         model="gpt-4.1-mini",
         input=prompt,
-        max_output_tokens=120
+        max_output_tokens=120,
     )
 
     return r.output_text.strip()
@@ -233,8 +245,7 @@ def generate_answer(question: str) -> str:
     )
 
     answer = r.output_text.strip()
-    answer = shorten_answer(answer)
-    return answer
+    return shorten_answer(answer)
 
 # =========================
 # WEBHOOK VERIFY
@@ -260,32 +271,36 @@ async def receive(request: Request):
     try:
         value = data["entry"][0]["changes"][0]["value"]
 
-        # Ignora status de mensagens enviadas pela empresa
+        # 1) Ignore all status callbacks
         if "statuses" in value:
             return {"status": "ok"}
 
-        # Se não houver mensagens, ignora
-        if "messages" not in value:
+        # 2) Only handle real inbound user messages
+        messages = value.get("messages")
+        if not messages:
             return {"status": "ok"}
 
-        msg = value["messages"][0]
+        msg = messages[0]
 
-        # Ignora mensagens que não sejam texto
+        # 3) Only text messages
         if msg.get("type") != "text":
             return {"status": "ok"}
 
-        # Evita reprocessar a mesma mensagem
-        message_id = msg["id"]
-        if message_id in processed_message_ids:
-            return {"status": "ok"}
-        processed_message_ids.add(message_id)
-
-        # Ignora mensagens enviadas pela própria empresa, se vierem refletidas
-        display_phone = value.get("metadata", {}).get("display_phone_number")
-        if msg.get("from") == display_phone:
+        # 4) Deduplicate by message id
+        message_id = msg.get("id")
+        if not message_id:
             return {"status": "ok"}
 
-        phone = msg["from"]
+        if not mark_processed(message_id):
+            return {"status": "ok"}
+
+        # 5) Ignore messages sent by your own business number
+        business_display_phone = value.get("metadata", {}).get("display_phone_number")
+        sender = msg.get("from")
+        if sender == business_display_phone:
+            return {"status": "ok"}
+
+        phone = sender
         text = msg["text"]["body"]
 
         risk = classify_risk(text)
@@ -313,11 +328,11 @@ async def receive(request: Request):
             return {"status": "ok"}
 
         typing_indicator(message_id)
-
         answer = generate_answer(text)
         send_message(phone, answer)
 
     except Exception as e:
-        print("ERRO:", e)
+        print("WEBHOOK ERROR:", e)
+        print("PAYLOAD:", data)
 
     return {"status": "ok"}

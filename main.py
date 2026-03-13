@@ -311,8 +311,7 @@ def generate_safe_reply(phone: str, text: str) -> str:
         response = client.chat.completions.create(
             model="gpt-5-mini",
             messages=messages,
-            max_completion_tokens=120,
-            temperature=0.3
+            max_completion_tokens=120
         )
         
         reply = response.choices[0].message.content

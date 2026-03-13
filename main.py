@@ -16,6 +16,7 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
+DEBUG_REFERENCES = os.getenv("DEBUG_REFERENCES", "false").lower() == "true"
 
 #if not VERIFY_TOKEN:
     #raise ValueError("VERIFY_TOKEN não configurado")
@@ -128,6 +129,73 @@ def send_whatsapp_text(to: str, body: str) -> None:
     print("WHATSAPP SEND BODY:", response.text)
 
 # =========================
+# Debug de referências
+# =========================
+def debug_search_references(user_text: str) -> list[dict]:
+    """
+    Busca direta no vector store para inspecionar quais arquivos/chunks
+    estão sendo recuperados para a pergunta.
+    """
+    try:
+        results = client.vector_stores.search(
+            vector_store_id=VECTOR_STORE_ID,
+            query=user_text,
+        )
+
+        references = []
+
+        # Dependendo da versão do SDK, results.data pode trazer objetos com
+        # atributos diferentes. Por isso usamos getattr com fallback.
+        for item in results.data:
+            content_preview = None
+
+            # tenta extrair conteúdo de forma defensiva
+            if hasattr(item, "content") and item.content:
+                content_preview = item.content
+            elif isinstance(item, dict):
+                content_preview = item.get("content")
+
+            references.append({
+                "file_id": getattr(item, "file_id", None) if not isinstance(item, dict) else item.get("file_id"),
+                "filename": getattr(item, "filename", None) if not isinstance(item, dict) else item.get("filename"),
+                "score": getattr(item, "score", None) if not isinstance(item, dict) else item.get("score"),
+                "text": content_preview,
+            })
+
+        return references
+
+    except Exception as e:
+        print("DEBUG SEARCH ERROR:", str(e))
+        return []
+
+def print_references(refs: list[dict]) -> None:
+    print("\n=== REFERÊNCIAS RECUPERADAS ===")
+    if not refs:
+        print("Nenhuma referência encontrada.")
+    for i, ref in enumerate(refs, start=1):
+        print(f"\n[{i}] arquivo: {ref.get('filename')}")
+        print(f"score: {ref.get('score')}")
+        print(f"file_id: {ref.get('file_id')}")
+        print(f"trecho: {str(ref.get('text'))[:500]}")
+    print("=== FIM REFERÊNCIAS ===\n")
+
+def format_reference_list(refs: list[dict]) -> str:
+    """
+    Formata lista enxuta de arquivos consultados para anexar à resposta
+    quando DEBUG_REFERENCES estiver ativo.
+    """
+    seen = []
+    for ref in refs:
+        filename = ref.get("filename")
+        if filename and filename not in seen:
+            seen.append(filename)
+
+    if not seen:
+        return ""
+
+    return "\n\nFontes consultadas:\n- " + "\n- ".join(seen[:5])
+
+# =========================
 # OpenAI + file_search
 # =========================
 def generate_safe_reply(user_text: str) -> str:
@@ -148,7 +216,7 @@ def generate_safe_reply(user_text: str) -> str:
 
         answer = response.output_text.strip()
 
-        # pós-checagem simples
+        # Pós-checagem simples
         lowered = answer.lower()
         blocked_terms = ["diagnóstico", "diagnostico", "prescrev", "medicamento"]
 
@@ -212,8 +280,9 @@ async def receive_webhook(request: Request):
 
         msg = value["messages"][0]
 
-        # tratar só texto no MVP
+        # trata só texto no MVP
         if msg.get("type") != "text":
+            print("Mensagem ignorada. Tipo não suportado:", msg.get("type"))
             return {"status": "ok"}
 
         phone = msg["from"]
@@ -234,8 +303,19 @@ async def receive_webhook(request: Request):
             send_whatsapp_text(phone, medical_referral_message())
             return {"status": "ok"}
 
+        # Debug opcional de referências
+        refs = []
+        if DEBUG_REFERENCES:
+            refs = debug_search_references(text)
+            print_references(refs)
+
         # Guardrail 2: só casos liberados chegam à IA
         reply = generate_safe_reply(text)
+
+        # Se quiser ver as fontes também no WhatsApp em modo debug
+        if DEBUG_REFERENCES:
+            reply += format_reference_list(refs)
+
         send_whatsapp_text(phone, reply)
 
     except Exception as e:

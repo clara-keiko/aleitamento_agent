@@ -309,7 +309,7 @@ def generate_safe_reply(phone: str, text: str) -> str:
         messages.extend(history)
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             messages=messages,
             max_tokens=500,
             temperature=0.7

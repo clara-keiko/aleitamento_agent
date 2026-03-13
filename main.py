@@ -16,7 +16,6 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
-DEBUG_REFERENCES = os.getenv("DEBUG_REFERENCES", "false").lower() == "true"
 
 #if not VERIFY_TOKEN:
     #raise ValueError("VERIFY_TOKEN não configurado")
@@ -108,14 +107,14 @@ def classify_risk(text: str) -> str:
 
 def emergency_message() -> str:
     return (
-        "Isso pode ser uma urgência. "
+        "Entendo sua preocupação. Pelo que você descreveu, isso pode ser uma situação de urgência. "
         "Procure atendimento médico de emergência imediatamente."
     )
 
 def medical_referral_message() -> str:
     return (
-        "Seu relato pode indicar um sinal de alerta. "
-        "Procure avaliação médica o quanto antes. "
+        "Entendo sua preocupação. Pelo que você descreveu, pode haver um sinal de alerta. "
+        "O mais seguro é procurar avaliação médica o quanto antes. "
         "Se houver dificuldade para respirar, sonolência excessiva, febre, piora "
         "ou recusa para mamar, busque atendimento imediatamente."
     )
@@ -140,72 +139,28 @@ def send_whatsapp_text(to: str, body: str) -> None:
     print("WHATSAPP SEND STATUS:", response.status_code)
     print("WHATSAPP SEND BODY:", response.text)
 
-# =========================
-# Debug de referências
-# =========================
-def debug_search_references(user_text: str) -> list[dict]:
+def send_typing_indicator(message_id: str) -> None:
     """
-    Busca direta no vector store para inspecionar quais arquivos/chunks
-    estão sendo recuperados para a pergunta.
+    Marca a mensagem como lida e exibe o indicador de 'digitando'
+    para casos seguros, antes da consulta à base + IA.
     """
-    try:
-        results = client.vector_stores.search(
-            vector_store_id=VECTOR_STORE_ID,
-            query=user_text,
-        )
+    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message_id,
+        "typing_indicator": {
+            "type": "text"
+        }
+    }
 
-        references = []
-
-        # Dependendo da versão do SDK, results.data pode trazer objetos com
-        # atributos diferentes. Por isso usamos getattr com fallback.
-        for item in results.data:
-            content_preview = None
-
-            # tenta extrair conteúdo de forma defensiva
-            if hasattr(item, "content") and item.content:
-                content_preview = item.content
-            elif isinstance(item, dict):
-                content_preview = item.get("content")
-
-            references.append({
-                "file_id": getattr(item, "file_id", None) if not isinstance(item, dict) else item.get("file_id"),
-                "filename": getattr(item, "filename", None) if not isinstance(item, dict) else item.get("filename"),
-                "score": getattr(item, "score", None) if not isinstance(item, dict) else item.get("score"),
-                "text": content_preview,
-            })
-
-        return references
-
-    except Exception as e:
-        print("DEBUG SEARCH ERROR:", str(e))
-        return []
-
-def print_references(refs: list[dict]) -> None:
-    print("\n=== REFERÊNCIAS RECUPERADAS ===")
-    if not refs:
-        print("Nenhuma referência encontrada.")
-    for i, ref in enumerate(refs, start=1):
-        print(f"\n[{i}] arquivo: {ref.get('filename')}")
-        print(f"score: {ref.get('score')}")
-        print(f"file_id: {ref.get('file_id')}")
-        print(f"trecho: {str(ref.get('text'))[:500]}")
-    print("=== FIM REFERÊNCIAS ===\n")
-
-def format_reference_list(refs: list[dict]) -> str:
-    """
-    Formata lista enxuta de arquivos consultados para anexar à resposta
-    quando DEBUG_REFERENCES estiver ativo.
-    """
-    seen = []
-    for ref in refs:
-        filename = ref.get("filename")
-        if filename and filename not in seen:
-            seen.append(filename)
-
-    if not seen:
-        return ""
-
-    return "\n\nFontes consultadas:\n- " + "\n- ".join(seen[:5])
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    print("TYPING STATUS:", response.status_code)
+    print("TYPING BODY:", response.text)
 
 # =========================
 # OpenAI + file_search
@@ -222,6 +177,7 @@ def generate_safe_reply(user_text: str) -> str:
                 {
                     "type": "file_search",
                     "vector_store_ids": [VECTOR_STORE_ID],
+                    "max_num_results": 3,
                 }
             ],
         )
@@ -234,8 +190,9 @@ def generate_safe_reply(user_text: str) -> str:
 
         if any(term in lowered for term in blocked_terms):
             return (
-                "Posso ajudar apenas com orientação educativa geral com base nos materiais aprovados. "
-                "Se houver preocupação clínica, procure avaliação médica."
+                "Quero te ajudar da forma mais segura possível. "
+                "Posso oferecer apenas orientação educativa geral com base nos materiais aprovados. "
+                "Se houver preocupação clínica, o mais seguro é procurar avaliação médica."
             )
 
         return answer
@@ -243,7 +200,7 @@ def generate_safe_reply(user_text: str) -> str:
     except Exception as e:
         print("OPENAI ERROR:", str(e))
         return (
-            "No momento só posso oferecer orientação educativa geral limitada. "
+            "Entendo sua preocupação. No momento só consigo oferecer orientação educativa geral limitada. "
             "Se houver febre, dificuldade para respirar, piora, sonolência excessiva "
             "ou recusa para mamar, procure atendimento médico."
         )
@@ -281,32 +238,33 @@ async def receive_webhook(request: Request):
 
         value = changes[0].get("value", {})
 
-        # 1) status de mensagens enviadas pela empresa
+        # Ignora eventos de status
         if "statuses" in value:
             print("STATUS EVENT:", value["statuses"])
             return {"status": "ok"}
 
-        # 2) mensagens recebidas do usuário
         if "messages" not in value:
             return {"status": "ok"}
 
         msg = value["messages"][0]
 
-        # trata só texto no MVP
+        # Trata apenas texto no MVP
         if msg.get("type") != "text":
             print("Mensagem ignorada. Tipo não suportado:", msg.get("type"))
             return {"status": "ok"}
 
         phone = msg["from"]
         text = msg["text"]["body"]
+        message_id = msg["id"]
 
         print("PHONE:", phone)
         print("TEXT:", text)
 
-        # Guardrail 1: risco clínico antes da IA
+        # Guardrail antes da IA
         risk = classify_risk(text)
         print("RISK:", risk)
 
+        # Para red flags, responde imediatamente sem digitação
         if risk == "EMERGENCY_NOW":
             send_whatsapp_text(phone, emergency_message())
             return {"status": "ok"}
@@ -315,19 +273,11 @@ async def receive_webhook(request: Request):
             send_whatsapp_text(phone, medical_referral_message())
             return {"status": "ok"}
 
-        # Debug opcional de referências
-        refs = []
-        if DEBUG_REFERENCES:
-            refs = debug_search_references(text)
-            print_references(refs)
+        # Para casos seguros, mostra "digitando" antes de consultar a base
+        send_typing_indicator(message_id)
 
-        # Guardrail 2: só casos liberados chegam à IA
+        # Caso seguro: usa OpenAI + file_search
         reply = generate_safe_reply(text)
-
-        # Se quiser ver as fontes também no WhatsApp em modo debug
-        if DEBUG_REFERENCES:
-            reply += format_reference_list(refs)
-
         send_whatsapp_text(phone, reply)
 
     except Exception as e:

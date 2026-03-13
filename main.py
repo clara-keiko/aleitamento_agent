@@ -30,6 +30,7 @@ WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 if not WHATSAPP_TOKEN:
     raise ValueError("WHATSAPP_TOKEN não configurado")
@@ -340,11 +341,27 @@ def generate_safe_reply(phone: str, text: str) -> str:
         messages = [{"role": "system", "content": SAFE_SYSTEM_PROMPT}]
         messages.extend(history)
         
-        response = client.chat.completions.create(
-            model="gpt-5-mini",
-            messages=messages,
-            max_completion_tokens=120
-        )
+        response = None
+
+        # Compatibilidade entre versões/modelos que aceitam
+        # max_completion_tokens vs max_tokens.
+        try:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=messages,
+                max_completion_tokens=120
+            )
+        except Exception as first_error:
+            logger.warning(
+                "chat.completions com max_completion_tokens falhou, "
+                "tentando fallback com max_tokens. Erro: %s",
+                first_error
+            )
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=messages,
+                max_tokens=120
+            )
 
         choice = response.choices[0].message
         reply = ""

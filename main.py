@@ -10,14 +10,14 @@ app = FastAPI()
 # =========================
 # ENV
 # =========================
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+#VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID")
 
-if not VERIFY_TOKEN:
-    raise ValueError("VERIFY_TOKEN não configurado")
+#if not VERIFY_TOKEN:
+    #raise ValueError("VERIFY_TOKEN não configurado")
 
 if not WHATSAPP_TOKEN:
     raise ValueError("WHATSAPP_TOKEN não configurado")
@@ -32,6 +32,9 @@ if not VECTOR_STORE_ID:
     raise ValueError("VECTOR_STORE_ID não configurado")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Evita responder duas vezes ao mesmo evento
+processed_message_ids = set()
 
 # =========================
 # PROMPT
@@ -257,17 +260,33 @@ async def receive(request: Request):
     try:
         value = data["entry"][0]["changes"][0]["value"]
 
+        # Ignora status de mensagens enviadas pela empresa
+        if "statuses" in value:
+            return {"status": "ok"}
+
+        # Se não houver mensagens, ignora
         if "messages" not in value:
             return {"status": "ok"}
 
         msg = value["messages"][0]
 
-        if msg["type"] != "text":
+        # Ignora mensagens que não sejam texto
+        if msg.get("type") != "text":
+            return {"status": "ok"}
+
+        # Evita reprocessar a mesma mensagem
+        message_id = msg["id"]
+        if message_id in processed_message_ids:
+            return {"status": "ok"}
+        processed_message_ids.add(message_id)
+
+        # Ignora mensagens enviadas pela própria empresa, se vierem refletidas
+        display_phone = value.get("metadata", {}).get("display_phone_number")
+        if msg.get("from") == display_phone:
             return {"status": "ok"}
 
         phone = msg["from"]
         text = msg["text"]["body"]
-        message_id = msg["id"]
 
         risk = classify_risk(text)
 

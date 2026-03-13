@@ -157,6 +157,8 @@ Você é um assistente educativo em puericultura e amamentação.
 Responda de forma clara, empática e segura.
 Nunca forneça diagnósticos médicos.
 Em caso de emergência, oriente a buscar atendimento imediato.
+Se não tiver certeza sobre uma informação, deixe isso explícito.
+Prefira respostas completas, com passos práticos e objetivos.
 """
 
 # =========================
@@ -342,6 +344,7 @@ def generate_safe_reply(phone: str, text: str) -> str:
         messages.extend(history)
         
         response = None
+        max_output_tokens = 280
 
         # Compatibilidade entre versões/modelos que aceitam
         # max_completion_tokens vs max_tokens.
@@ -349,7 +352,7 @@ def generate_safe_reply(phone: str, text: str) -> str:
             response = client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=messages,
-                max_completion_tokens=120
+                max_completion_tokens=max_output_tokens
             )
         except Exception as first_error:
             logger.warning(
@@ -360,10 +363,11 @@ def generate_safe_reply(phone: str, text: str) -> str:
             response = client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=messages,
-                max_tokens=120
+                max_tokens=max_output_tokens
             )
 
-        choice = response.choices[0].message
+        first_choice = response.choices[0]
+        choice = first_choice.message
         reply = ""
 
         # Compatibilidade com diferentes formatos do SDK
@@ -379,6 +383,12 @@ def generate_safe_reply(phone: str, text: str) -> str:
             reply = "".join(text_parts)
 
         reply = sanitize_whatsapp_text(reply)
+
+        finish_reason = getattr(first_choice, "finish_reason", None)
+        if finish_reason == "length":
+            reply = sanitize_whatsapp_text(
+                f"{reply}\n\nSe quiser, posso continuar a explicação em mais detalhes."
+            )
 
         # Adiciona resposta à memória
         memory.add_message(phone, "assistant", reply)

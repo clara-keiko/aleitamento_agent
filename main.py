@@ -88,7 +88,7 @@ def medical_referral_message() -> str:
 
 def generate_safe_reply(user_text: str) -> str:
     response = client.responses.create(
-        model="gpt-5.4-mini",
+        model="gpt-4o-mini",
         input=[
             {"role": "system", "content": SAFE_SYSTEM_PROMPT},
             {

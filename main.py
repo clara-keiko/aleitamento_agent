@@ -345,9 +345,24 @@ def generate_safe_reply(phone: str, text: str) -> str:
             messages=messages,
             max_completion_tokens=120
         )
-        
-        reply = response.choices[0].message.content
-        
+
+        choice = response.choices[0].message
+        reply = ""
+
+        # Compatibilidade com diferentes formatos do SDK
+        if isinstance(choice.content, str):
+            reply = choice.content
+        elif isinstance(choice.content, list):
+            text_parts = []
+            for part in choice.content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+                elif hasattr(part, "type") and getattr(part, "type") == "text":
+                    text_parts.append(getattr(part, "text", ""))
+            reply = "".join(text_parts)
+
+        reply = sanitize_whatsapp_text(reply)
+
         # Adiciona resposta à memória
         memory.add_message(phone, "assistant", reply)
         

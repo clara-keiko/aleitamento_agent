@@ -1,6 +1,5 @@
 from typing import Annotated
-
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import PlainTextResponse
 
 app = FastAPI()
@@ -16,3 +15,10 @@ def verify_webhook(
     if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN and hub_challenge:
         return hub_challenge
     return PlainTextResponse("Forbidden", status_code=403)
+
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+    data = await request.json()
+    print("EVENTO RECEBIDO:")
+    print(data)
+    return {"status": "ok"}

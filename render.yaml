@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: aleitamento-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: VECTOR_STORE_ID
+        sync: false

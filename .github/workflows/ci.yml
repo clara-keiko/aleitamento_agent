@@ -1,17 +1,24 @@
 name: CI
 
+# Só main e pull requests. Antes rodava em `push` para qualquer branch **e**
+# em `pull_request`, o que dobrava a execução em todo commit de PR.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+
+# Um push novo cancela a execução anterior do mesmo PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip

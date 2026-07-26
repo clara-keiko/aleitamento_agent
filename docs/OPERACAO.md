@@ -343,7 +343,101 @@ pgvector é complexidade sem retorno.
 
 ---
 
-## 6. Roadmap sugerido
+## 6. A IA está boa? Devemos trocar de modelo?
+
+Resposta curta: **o modelo não é o seu gargalo — mas o `gpt-4o-mini` está velho e
+vale subir de versão dentro da OpenAI.** Trocar de *fornecedor* seria caro pelo motivo
+errado.
+
+### 6.1 Primeiro, uma boa notícia: vocês já estão na API certa
+
+A **Assistants API é desligada em 26 de agosto de 2026** — daqui a um mês. Muito
+projeto de RAG vai quebrar nessa data.
+
+**O seu não.** O código usa a **Responses API** com `file_search` e `vector_store_ids`,
+que é exatamente o *destino* da migração, não a origem. Nada a fazer.
+
+⚠️ Um detalhe achado ao pinar as dependências: o SDK `openai` **1.x não tem**
+`client.responses` nem `client.vector_stores`. Um pin em 1.x instala, importa e passa
+nos testes com mock — e quebra na primeira mensagem real. O `requirements.txt` está em
+`openai==2.48.0`, e há um teste (`tests/test_sdk_contract.py`) que falha no CI se
+alguém baixar a versão.
+
+### 6.2 Custo, no seu workload real (6.000 tokens de entrada, 250 de saída)
+
+| Modelo | Entrada /1M | Saída /1M | Por pergunta | Por mês (12 mil) | Mantém o `file_search`? |
+|---|---|---|---|---|---|
+| **`gpt-4o-mini`** (atual) | US$ 0,15 | US$ 0,60 | US$ 0,0011 | **US$ 12,60** | ✅ |
+| **`gpt-5-mini`** | ⚠️ US$ 0,25 | ⚠️ US$ 2,00 | US$ 0,0020 | **US$ 24,00** | ✅ |
+| `gpt-5.4-mini` | ⚠️ US$ 0,75 | ⚠️ US$ 4,50 | US$ 0,0056 | US$ 67,50 | ✅ |
+| Gemini 3 Flash | ⚠️ US$ 0,50 | ⚠️ US$ 3,00 | US$ 0,0038 | US$ 45,00 | ❌ |
+| Claude Haiku 4.5 | ⚠️ US$ 1,00 | ⚠️ US$ 5,00 | US$ 0,0073 | US$ 87,00 | ❌ |
+
+Repare na escala: mesmo a opção **mais cara** custa US$ 87/mês para mil mães — R$ 0,44
+por mãe. **Custo não decide nada aqui.** Qualquer um desses cabe no orçamento.
+
+### 6.3 O que realmente pesa: trocar de fornecedor custa o RAG inteiro
+
+O `file_search` da OpenAI faz, gerenciado, uma pilha que ninguém vê: extração de texto
+de PDF e DOCX, chunking, embeddings, busca híbrida (vetorial + palavra-chave),
+reranking e rastreio de citação — que é justamente o que sustenta nossa checagem de
+fundamentação.
+
+Sair da OpenAI significa **reconstruir tudo isso**: pgvector, pipeline de embeddings,
+reranker, e a lógica de citação. São semanas de trabalho e uma nova superfície de bugs.
+
+E o ponto decisivo: **num RAG, a qualidade da resposta é determinada muito mais pela
+recuperação do que pelo QI do modelo.** Se o trecho certo do material chega ao contexto,
+qualquer modelo moderno escreve uma resposta boa. Se não chega, nenhum modelo salva.
+Trocar de fornecedor troca a parte que menos importa e reconstrói a que mais importa.
+
+### 6.4 A recomendação
+
+1. **Fique na OpenAI por enquanto.** A integração com `file_search` vale mais que a
+   diferença entre modelos pequenos de 2026.
+2. **Saia do `gpt-4o-mini`.** É um modelo de 2024. Teste o `gpt-5-mini`: o custo dobra
+   para US$ 24/mês a mil mães, o que é irrelevante, e a diferença em seguir instrução
+   ("não prescreva", "não invente") tende a ser real.
+3. **Decida com o eval, não com opinião.** É para isso que ele existe:
+
+   ```bash
+   python evals/run_eval.py --live --model gpt-4o-mini
+   python evals/run_eval.py --live --model gpt-5-mini
+   ```
+
+   Compare taxa de fundamentação, recusa fora de escopo, vazamento de dose em `med-03`,
+   latência p95 e custo. Aí a escolha vira dado.
+4. **Meça a recuperação antes de culpar o modelo.** Se a taxa de "fora de escopo" estiver
+   alta em perguntas que *estão* no material, o problema é a recuperação — e trocar de
+   modelo não resolve.
+
+### 6.5 Quando trocar de fornecedor faria sentido
+
+- **Latência.** O WhatsApp é conversa; acima de ~5 s a mãe acha que travou. Claude
+  Haiku 4.5 tem fama de primeiro token muito rápido (⚠️ ~600 ms em teste de terceiros).
+  Se o eval mostrar p95 ruim e isso não melhorar reduzindo `MAX_RETRIEVAL_RESULTS`, aí
+  sim vale medir outro fornecedor.
+- **Juiz de segurança independente (P2).** Uma segunda IA, **de outro fornecedor**,
+  checando se a resposta está fundamentada e livre de prescrição. O argumento aqui é
+  bom: modelos da mesma família tendem a compartilhar pontos cegos. Isso usa o segundo
+  fornecedor como *auditor*, não como motor — e não exige refazer o RAG.
+- **Residência de dados no Brasil.** Se a LGPD virar exigência de não sair do país, o
+  problema deixa de ser escolha de modelo e vira outra arquitetura inteira.
+
+### 6.6 O que melhoraria a resposta mais do que qualquer troca de modelo
+
+Em ordem de impacto:
+
+1. **Validação clínica do conjunto dourado** por uma consultora de amamentação. Hoje o
+   eval mede consistência, não correção. É a lacuna mais séria do projeto.
+2. **Medir e ajustar a recuperação** — quantos trechos, de que tamanho, do documento certo.
+3. **Curadoria da base.** Os PDFs grandes (cadernetas, 13 MB cada) têm muita coisa que
+   não é amamentação e competem com o material específico na recuperação.
+4. Só então: trocar de modelo.
+
+---
+
+## 7. Roadmap sugerido
 
 ### P0 — antes de qualquer mãe real usar
 
@@ -351,8 +445,8 @@ pgvector é complexidade sem retorno.
 - [ ] Comprar **um** número virtual e testar a verificação antes de contratar plano anual
 - [ ] Rodar `ingest_openai_kb.py` e guardar o `VECTOR_STORE_ID`
 - [ ] Gerar token permanente via System User (o de teste expira em 24 h)
-- [ ] Conjunto dourado: 50 perguntas reais respondidas e **revisadas por consultora de
-      amamentação**, com as respostas do agente aprovadas uma a uma
+- [ ] Revisar `evals/golden_set.yaml` com uma **consultora de amamentação** e aprovar,
+      uma a uma, as respostas que o agente dá hoje (`--live`)
 - [ ] Definir a base legal LGPD e publicar o aviso de privacidade
 - [ ] Render no plano Starter (não usar o free)
 
@@ -373,7 +467,7 @@ pgvector é complexidade sem retorno.
 
 ---
 
-## 7. Fontes
+## 8. Fontes
 
 Pesquisa de julho de 2026. Preço e política mudam; reconfirme o que estiver marcado com ⚠️.
 

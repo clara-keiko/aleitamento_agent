@@ -27,6 +27,10 @@ services:
         generateValue: true
       - key: OPENAI_MODEL
         value: gpt-4o-mini
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "45"
+      - key: MAX_RETRIEVAL_RESULTS
+        value: "8"
       - key: ENABLE_AUDIO
         value: "true"
       - key: REQUIRE_SIGNATURE

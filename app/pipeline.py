@@ -5,12 +5,14 @@ clínica antes do modelo (uma emergência nunca deve depender de a OpenAI estar
 no ar) e checagem de fundamentação depois.
 """
 
+import time
+
 from app import guardrails
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.llm import AssistantEngine, fallback_message
 from app.logging_utils import get_logger, pseudonymize
-from app.memory import ConversationStore, MessageDeduplicator, RateLimiter
+from app.memory import ConversationStore, KnownUsers, MessageDeduplicator, RateLimiter
 
 log = get_logger(__name__)
 
@@ -24,6 +26,7 @@ class MessagePipeline:
         conversations: ConversationStore | None = None,
         deduplicator: MessageDeduplicator | None = None,
         rate_limiter: RateLimiter | None = None,
+        known_users: KnownUsers | None = None,
     ):
         self.settings = settings
         self.channel = channel
@@ -37,56 +40,76 @@ class MessagePipeline:
             max_messages=settings.rate_limit_messages,
             window_seconds=settings.rate_limit_window_seconds,
         )
+        self.known_users = known_users or KnownUsers()
 
     def handle(self, message: IncomingMessage) -> None:
+        started = time.monotonic()
         user = pseudonymize(message.sender)
+        outcome = "unknown"
 
+        try:
+            outcome = self._handle(message, user)
+        finally:
+            # Uma linha por mensagem, sem dado pessoal: é o que permite medir
+            # taxa de fora-de-escopo, disparo de guardrail e latência.
+            log.info(
+                "processado user=%s outcome=%s kind=%s duracao_ms=%d",
+                user,
+                outcome,
+                message.kind,
+                int((time.monotonic() - started) * 1000),
+            )
+
+    def _handle(self, message: IncomingMessage, user: str) -> str:
         if not self.deduplicator.check_and_mark(message.message_id):
-            log.info("mensagem repetida ignorada (%s)", user)
-            return
+            return "duplicada"
 
         if not self.rate_limiter.allow(message.sender):
-            log.warning("rate limit atingido (%s)", user)
             self.channel.send_text(message.sender, guardrails.rate_limited_message())
-            return
+            return "rate_limited"
 
         text = self._resolve_text(message)
         if text is None:
             self.channel.send_text(message.sender, guardrails.unsupported_media_message())
-            return
+            return "nao_suportado"
 
         if guardrails.is_opt_out(text):
-            self.conversations.forget(message.sender)
+            self._forget(message.sender)
             self.channel.send_text(message.sender, guardrails.opt_out_message())
-            log.info("opt-out processado (%s)", user)
-            return
+            return "opt_out"
 
         # Primeiro contato: escopo, aviso de automação e canal de emergência.
-        if self.conversations.mark_greeted(message.sender):
+        if self.known_users.is_first_contact(message.sender):
             self.channel.send_text(message.sender, guardrails.welcome_message())
 
+        # Triagem clínica antes de tudo: "oi, meu bebê não respira" é
+        # emergência, não saudação.
         risk = guardrails.classify_risk(text)
-        log.info("mensagem processada (%s) risco=%s", user, risk.level)
 
         if risk.level == guardrails.EMERGENCY_NOW:
             self.channel.send_text(message.sender, guardrails.emergency_message())
-            return
+            return "emergencia"
 
         if risk.level == guardrails.REFER_MEDICAL_CARE:
             self.channel.send_text(message.sender, guardrails.medical_referral_message())
-            return
+            return "encaminhamento"
+
+        # Saudação ou agradecimento não vai ao modelo: gastaria token e cairia
+        # na checagem de fundamentação, devolvendo "não encontrei no material".
+        if guardrails.is_small_talk(text):
+            self.channel.send_text(message.sender, guardrails.small_talk_message())
+            return "social"
 
         history = self.conversations.history(message.sender)
         answer = self.engine.answer(text, history=history)
 
         if answer.error:
             self.channel.send_text(message.sender, fallback_message())
-            return
+            return "erro_modelo"
 
         if not answer.grounded:
-            log.info("resposta sem citação da base; devolvendo fora de escopo (%s)", user)
             self.channel.send_text(message.sender, guardrails.out_of_scope_message())
-            return
+            return "fora_de_escopo"
 
         reply = answer.text
         if risk.needs_safety_note:
@@ -97,12 +120,18 @@ class MessagePipeline:
         self.conversations.append(message.sender, "assistant", answer.text)
 
         self.channel.send_text(message.sender, reply)
+        return "respondido_com_nota" if risk.needs_safety_note else "respondido"
+
+    def _forget(self, sender: str) -> None:
+        """Apaga tudo que guardamos de um usuário (LGPD, direito de eliminação)."""
+        self.conversations.forget(sender)
+        self.known_users.forget(sender)
+        self.rate_limiter.forget(sender)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""
         if message.kind == "text":
-            text = (message.text or "").strip()
-            return text or None
+            return (message.text or "").strip() or None
 
         if message.kind == "audio":
             if not self.settings.enable_audio:
@@ -110,7 +139,6 @@ class MessagePipeline:
             audio = self.channel.fetch_media(message)
             if not audio:
                 return None
-            transcript = self.engine.transcribe(audio, message.media_mime)
-            return transcript or None
+            return self.engine.transcribe(audio, message.media_mime) or None
 
         return None

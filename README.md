@@ -54,11 +54,31 @@ curl localhost:8000/health
 Para testar o webhook local sem `APP_SECRET`, use `REQUIRE_SIGNATURE=false`
 — **apenas em desenvolvimento**.
 
-## Testes
+## Testes e avaliação
 
 ```bash
-python -m pytest
+python -m pytest          # 120 testes
+ruff check .              # lint
+python evals/run_eval.py  # triagem clínica contra o conjunto dourado
 ```
+
+O eval é a peça que responde *"o agente ainda está seguro?"* e *"trocar de modelo
+melhora?"*. Ele roda no CI e **falha o build se um caso de emergência deixar de ser
+reconhecido**.
+
+Para comparar modelos de verdade (chama a API, custa alguns centavos):
+
+```bash
+python evals/run_eval.py --live --model gpt-4o-mini
+python evals/run_eval.py --live --model gpt-5-mini
+```
+
+Ele imprime taxa de acerto por categoria, latência p50/p95 e custo estimado por mês.
+Ver [docs/OPERACAO.md §6](docs/OPERACAO.md) para a análise da escolha de modelo.
+
+⚠️ O conjunto dourado (`evals/golden_set.yaml`) foi escrito para ser editado por quem
+entende de amamentação. **Antes do piloto, uma consultora precisa revisar cada caso** —
+hoje o eval mede consistência, não correção clínica.
 
 ## Configuração
 
@@ -87,17 +107,26 @@ depois da pausa se perde no cold start.
 ## Estrutura
 
 ```
-main.py               FastAPI: webhook, handshake, /health
+main.py               FastAPI: webhook, handshake, health
 app/config.py         variáveis de ambiente (nunca quebra no import)
-app/guardrails.py     triagem clínica e mensagens fixas
+app/guardrails.py     triagem clínica, small talk e mensagens fixas
 app/llm.py            RAG e transcrição; checagem de fundamentação
 app/pipeline.py       orquestra a mensagem até a resposta
-app/memory.py         histórico curto, deduplicação, rate limit
+app/memory.py         histórico, usuários conhecidos, dedup, rate limit
+app/http.py           POST com retry e backoff
 app/channels/         Meta Cloud API e Twilio atrás da mesma interface
 app/logging_utils.py  log sem dado pessoal
+evals/                conjunto dourado + runner de avaliação
 docs/                 base de conhecimento + OPERACAO.md
-tests/                75 testes
+tests/                120 testes
 ```
+
+Dois endpoints de saúde, com papéis diferentes:
+
+- `GET /health` — **liveness**, sempre 200 se o processo está de pé. É o que a
+  plataforma monitora. Não devolve 503 por configuração incompleta de propósito:
+  se devolvesse, o deploy nunca subiria e ninguém leria o log para descobrir o que falta.
+- `GET /health/ready` — **readiness**, 503 enquanto faltar variável.
 
 ## Privacidade
 

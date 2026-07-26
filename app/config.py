@@ -6,8 +6,8 @@ evita o ciclo "deploy falha e não dá para ler o log" em plataformas como
 Render, e mantém o healthcheck respondendo durante uma rotação de segredo.
 """
 
-from dataclasses import dataclass, field
 import os
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -64,6 +64,16 @@ class Settings:
     transcribe_model: str = field(
         default_factory=lambda: _env("TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
     )
+    # Segundos até desistir de uma chamada. O default do SDK é 600 s, o que
+    # num webhook é uma thread presa por dez minutos.
+    openai_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("OPENAI_TIMEOUT_SECONDS", 45)
+    )
+    # Trechos recuperados por pergunta: principal alavanca de custo e latência.
+    max_retrieval_results: int = field(
+        default_factory=lambda: _env_int("MAX_RETRIEVAL_RESULTS", 8)
+    )
+    max_output_tokens: int = field(default_factory=lambda: _env_int("MAX_OUTPUT_TOKENS", 500))
 
     # Comportamento
     enable_audio: bool = field(default_factory=lambda: _env_bool("ENABLE_AUDIO", True))

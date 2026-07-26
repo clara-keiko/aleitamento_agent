@@ -10,8 +10,8 @@ como fora de escopo. Isso ataca alucinação, que é o risco real, em vez de
 punir a presença de uma palavra.
 """
 
-from dataclasses import dataclass
 import io
+from dataclasses import dataclass
 
 from openai import OpenAI, OpenAIError
 
@@ -67,7 +67,13 @@ class AssistantEngine:
     @property
     def client(self) -> OpenAI:
         if self._client is None:
-            self._client = OpenAI(api_key=self.settings.openai_api_key)
+            # O default do SDK é 600 s. Num webhook isso é uma thread presa
+            # por dez minutos enquanto a mãe olha para a tela sem resposta.
+            self._client = OpenAI(
+                api_key=self.settings.openai_api_key,
+                timeout=self.settings.openai_timeout_seconds,
+                max_retries=2,
+            )
         return self._client
 
     # ------------------------------------------------------------------
@@ -86,8 +92,12 @@ class AssistantEngine:
                     {
                         "type": "file_search",
                         "vector_store_ids": [self.settings.vector_store_id],
+                        # Os trechos recuperados dominam o custo de entrada.
+                        # Limitar aqui é a alavanca mais direta sobre a conta.
+                        "max_num_results": self.settings.max_retrieval_results,
                     }
                 ],
+                max_output_tokens=self.settings.max_output_tokens,
             )
         except OpenAIError as exc:
             log.error("erro na chamada à OpenAI: %s", exc)

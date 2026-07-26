@@ -15,6 +15,7 @@ import requests
 
 from app.channels.base import Channel, IncomingMessage, split_message
 from app.config import Settings
+from app.http import post_with_retry
 from app.logging_utils import get_logger, pseudonymize
 
 log = get_logger(__name__)
@@ -110,16 +111,15 @@ class TwilioChannel(Channel):
                     "Body": part,
                 }
             )
-            try:
-                response = requests.post(
-                    url,
-                    data=data,
-                    auth=auth,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    timeout=TIMEOUT,
-                )
-            except requests.RequestException as exc:
-                log.error("falha de rede ao enviar para %s: %s", pseudonymize(to), exc)
+            response = post_with_retry(
+                url,
+                data=data,
+                auth=auth,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=TIMEOUT,
+            )
+            if response is None:
+                log.error("envio falhou após retries para %s", pseudonymize(to))
                 return False
 
             if response.status_code >= 400:

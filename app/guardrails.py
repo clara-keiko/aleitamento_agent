@@ -12,9 +12,9 @@ Duas mudanças em relação à primeira versão:
    de segurança anexada; só o relato de sintoma dispara o encaminhamento puro.
 """
 
-from dataclasses import dataclass
 import re
 import unicodedata
+from dataclasses import dataclass
 
 EMERGENCY_NOW = "EMERGENCY_NOW"
 REFER_MEDICAL_CARE = "REFER_MEDICAL_CARE"
@@ -51,13 +51,17 @@ REFERRAL_PATTERNS = [
     r"\b4[0-2](\.|,)?\d?\s*(graus|c)\b",
     r"\bmuito molinh\w+\b",
     r"\bmuito sonolent\w+\b",
-    r"\bnao (quer )?mama\w*\b",
+    r"\bnao (quer |esta |ta |consegue )?mama\w*\b",
     r"\brecusa (o peito|mamar|a mama)\b",
     r"\bdesidrat\w+\b",
     r"\b(sem|pouco|pouca) (xixi|urina|fralda molhada)\b",
     r"\bsangue nas fezes\b",
     r"\b(vomita|vomitando) tudo\b",
-    r"\b(pele|olhos?) muito amarel\w+\b",
+    # Icterícia é descrita de várias formas: "olhos amarelos", "amarelo nos
+    # olhos", "pele amarelada". Cobrimos as duas ordens.
+    r"\b(pele|olhos?|corpo|rosto) \w{0,6} ?muito amarel\w+\b",
+    r"\b(pele|olhos?|corpo|rosto) amarel\w+\b",
+    r"\bamarel\w+ (n?[oa]s?|em) (pele|olhos?|corpo|rosto)\b",
     r"\bictericia\b",
     r"\bnao (esta )?ganhando peso\b",
     r"\bperdendo peso\b",
@@ -91,8 +95,82 @@ GENERAL_QUESTION_PATTERNS = [
 ]
 
 
+# Mensagens sociais. Sem isso, "obrigada!" cai na checagem de fundamentação,
+# não acha citação na base e a mãe recebe "não encontrei isso no material" —
+# resposta rude e confusa para quem só está agradecendo.
+#
+# Em vez de listar frases inteiras, listamos *fragmentos* sociais e aceitamos
+# a mensagem como social só se ela for feita inteiramente deles. Assim
+# "ok, entendi" e "oi, bom dia, tudo bem?" funcionam sem enumerar combinações.
+SOCIAL_TOKENS = [
+    r"oi+",
+    r"ola",
+    r"opa",
+    r"e ?ai",
+    r"hey",
+    r"alo+",
+    r"bom dia",
+    r"boa tarde",
+    r"boa noite",
+    r"muito obrigad[ao]",
+    r"mto obrigad[ao]",
+    r"obrigad[ao]",
+    r"brigad[ao]",
+    r"vlw",
+    r"valeu",
+    r"agradec\w*",
+    r"ok(ay)?",
+    r"ta bom",
+    r"tudo bem",
+    r"td bem",
+    r"como vai",
+    r"blz",
+    r"beleza",
+    r"certo",
+    r"entendi(do)?",
+    r"show",
+    r"perfeito",
+    r"otimo",
+    r"legal",
+    r"tchau",
+    r"ate logo",
+    r"ate mais",
+    r"falou",
+    r"bj(o?s)?",
+    r"abraco",
+    r"sim",
+    r"nao",
+]
+
+_SOCIAL_ALTERNATIVES = "|".join(SOCIAL_TOKENS)
+# Um ou mais fragmentos sociais, separados por vírgula/espaço, e nada mais.
+_ONLY_SOCIAL = re.compile(
+    rf"^(?:{_SOCIAL_ALTERNATIVES})(?:[,\s]+(?:{_SOCIAL_ALTERNATIVES}))*$"
+)
+
+# Mensagem só com emoji/pontuação também é social.
+_ONLY_SYMBOLS = re.compile(r"^[\W\d_]+$", re.UNICODE)
+
+
 def _matches(patterns: list[str], text: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
+
+
+def is_small_talk(text: str) -> bool:
+    """True se a mensagem inteira for social, sem conteúdo de dúvida.
+
+    Deliberadamente conservador: exige que *tudo* na mensagem seja social.
+    "oi, meu bebê está com febre" não é small talk — e, de qualquer forma, a
+    triagem clínica roda antes desta checagem no pipeline.
+    """
+    normalized = normalize(text).strip(" .!?,;")
+    if not normalized:
+        return False
+    if len(normalized) > 60:
+        return False
+    if _ONLY_SYMBOLS.match(normalized):
+        return True
+    return bool(_ONLY_SOCIAL.match(normalized))
 
 
 @dataclass(frozen=True)
@@ -150,6 +228,14 @@ def safety_note() -> str:
     return (
         "\n\n⚠️ Isso vale como informação geral. Se estiver acontecendo com "
         "você ou com o bebê agora, procure avaliação de um profissional de saúde."
+    )
+
+
+def small_talk_message() -> str:
+    return (
+        "Oi! Estou por aqui. 💙\n\n"
+        "Pode perguntar sobre amamentação, pega, produção de leite, sono do "
+        "bebê, doação de leite ou cuidados do dia a dia."
     )
 
 

@@ -38,10 +38,9 @@ if not settings.ready:
     )
 
 
-@app.get("/health")
-def health() -> JSONResponse:
+def _status_payload() -> dict:
     missing = settings.missing()
-    payload = {
+    return {
         "status": "ok" if not missing else "degraded",
         "provider": settings.provider,
         "model": settings.openai_model,
@@ -49,7 +48,25 @@ def health() -> JSONResponse:
         "signature_required": settings.require_signature,
         "missing_env": missing,
     }
-    return JSONResponse(payload, status_code=200 if not missing else 503)
+
+
+@app.get("/health")
+def health() -> JSONResponse:
+    """Liveness: responde 200 sempre que o processo está de pé.
+
+    Deliberadamente não devolve 503 com configuração incompleta. O
+    healthcheck da plataforma aponta para cá; se ele falhasse por falta de
+    variável, o deploy nunca subiria e voltaríamos ao problema original de
+    não conseguir ler o log para descobrir o que faltava.
+    """
+    return JSONResponse(_status_payload(), status_code=200)
+
+
+@app.get("/health/ready")
+def readiness() -> JSONResponse:
+    """Readiness: 503 enquanto faltar configuração para atender de verdade."""
+    payload = _status_payload()
+    return JSONResponse(payload, status_code=200 if not payload["missing_env"] else 503)
 
 
 @app.get("/webhook", response_class=PlainTextResponse)

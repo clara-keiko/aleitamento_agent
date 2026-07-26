@@ -74,6 +74,21 @@ class TestPrimeiroContato:
         boas_vindas = [b for _, b in channel.sent if "assistente educativo" in b]
         assert len(boas_vindas) == 1
 
+    def test_boas_vindas_sobrevivem_a_expiracao_da_conversa(self):
+        """O histórico expira em 30 min; reapresentar o serviço a cada meia
+        hora seria ruído. As duas coisas têm TTL separado."""
+        from app.memory import ConversationStore
+
+        pipeline, channel, _ = build()
+        # Conversa que expira imediatamente, usuário conhecido permanece.
+        pipeline.conversations = ConversationStore(ttl_seconds=0)
+
+        pipeline.handle(text_message("qual a pega correta?", "m1"))
+        pipeline.handle(text_message("e a posição?", "m2"))
+
+        boas_vindas = [b for _, b in channel.sent if "assistente educativo" in b]
+        assert len(boas_vindas) == 1
+
     def test_boas_vindas_declaram_automacao_e_emergencia(self):
         pipeline, channel, _ = build()
         pipeline.handle(text_message("oi", "m1"))
@@ -219,6 +234,41 @@ class TestAudio:
 
         assert engine.calls == []
         assert "texto e áudio" in channel.bodies
+
+
+class TestSmallTalk:
+    """Regressão: "obrigada" caía na checagem de fundamentação e recebia
+    "não encontrei isso no material" — resposta rude para quem agradece."""
+
+    def test_agradecimento_nao_vai_ao_modelo(self):
+        pipeline, channel, engine = build()
+        pipeline.handle(text_message("obrigada!", "m1"))
+
+        assert engine.calls == []
+        assert "Estou por aqui" in channel.bodies
+
+    def test_saudacao_simples(self):
+        pipeline, channel, engine = build()
+        pipeline.handle(text_message("bom dia", "m1"))
+        assert engine.calls == []
+
+    def test_so_emoji(self):
+        pipeline, channel, engine = build()
+        pipeline.handle(text_message("👍", "m1"))
+        assert engine.calls == []
+
+    def test_pergunta_real_nao_e_confundida_com_social(self):
+        pipeline, _, engine = build()
+        pipeline.handle(text_message("oi, como aumento a produção de leite?", "m1"))
+        assert len(engine.calls) == 1
+
+    def test_emergencia_vence_saudacao(self):
+        """"oi, meu bebê não respira" é emergência, não cumprimento."""
+        pipeline, channel, engine = build()
+        pipeline.handle(text_message("oi, meu bebe nao respira", "m1"))
+
+        assert engine.calls == []
+        assert "192" in channel.bodies
 
 
 class TestRateLimit:

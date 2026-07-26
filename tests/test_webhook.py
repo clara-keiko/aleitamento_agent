@@ -185,6 +185,41 @@ class TestConfiguracaoIncompleta:
         importlib.reload(main)
 
         with TestClient(main.app) as test_client:
-            resposta = test_client.get("/health")
+            # Liveness continua 200: se caísse, o healthcheck da plataforma
+            # derrubaria o deploy e o log do erro nunca seria lido.
+            vivo = test_client.get("/health")
+            assert vivo.status_code == 200
+            assert vivo.json()["status"] == "degraded"
+            assert "OPENAI_API_KEY" in vivo.json()["missing_env"]
+
+            # Readiness é quem sinaliza que não dá para atender.
+            pronto = test_client.get("/health/ready")
+            assert pronto.status_code == 503
+            assert "OPENAI_API_KEY" in pronto.json()["missing_env"]
+
+    def test_webhook_recusa_mensagem_sem_configuracao(self, monkeypatch):
+        for nome in ["APP_SECRET", "VERIFY_TOKEN", "WHATSAPP_TOKEN", "PHONE_NUMBER_ID"]:
+            monkeypatch.setenv(nome, "x")
+        monkeypatch.setenv("VECTOR_STORE_ID", "vs")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        import app.config
+
+        importlib.reload(app.config)
+        import main
+
+        importlib.reload(main)
+
+        corpo = mensagem_de_texto()
+        assinatura = hmac.new(b"x", corpo, hashlib.sha256).hexdigest()
+
+        with TestClient(main.app) as test_client:
+            resposta = test_client.post(
+                "/webhook",
+                content=corpo,
+                headers={
+                    "X-Hub-Signature-256": f"sha256={assinatura}",
+                    "Content-Type": "application/json",
+                },
+            )
             assert resposta.status_code == 503
-            assert "OPENAI_API_KEY" in resposta.json()["missing_env"]

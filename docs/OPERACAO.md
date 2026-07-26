@@ -26,8 +26,8 @@ que no Brasil pede **CNPJ ativo**, comprovante de endereço e documento do
 representante legal. Sem verificação você fica limitado a **250 destinatários únicos
 por 24 h**, o que ainda comporta um piloto pequeno.
 
-> Se hoje não há CNPJ disponível, essa é a dependência a resolver primeiro — não o número.
-> MEI tem CNPJ e costuma passar. Pessoa física sem CNPJ não conclui a verificação.
+> Se hoje não há CNPJ disponível, essa é a dependência a resolver primeiro — não o
+> número. O passo a passo, os documentos e o que fazer sem CNPJ estão na **§2.7**.
 
 ---
 
@@ -116,6 +116,76 @@ Três motivos para não usar **neste projeto**:
 3. **Não sustenta a responsabilidade.** Orientação materno-infantil precisa de canal
    auditável, com identidade verificada e trilha de conformidade. Um número que pode
    sumir a qualquer momento não atende.
+
+### 2.7 Como fazer a verificação de negócio na Meta
+
+**Antes de tudo: talvez você não precise dela agora.** Uma conta **não verificada**
+consegue conversar com até **250 destinatários únicos a cada 24 h**. Isso comporta um
+piloto de 100 mães sem nenhuma burocracia. A verificação é o que destrava os degraus
+seguintes (1.000 → 10.000 → 100.000 → ilimitado) e o cadastro de mais números.
+
+⚠️ A Meta aperta esse limiar de tempos em tempos; confirme no painel antes de contar
+com ele.
+
+#### Onde fica
+
+**Meta Business Suite** → **Configurações do negócio** → **Central de Segurança** →
+seção *Verificação da empresa* → **Iniciar verificação**.
+
+#### O que preencher — tem que bater *exatamente*
+
+Este é o ponto onde a maioria das solicitações morre. Os dados digitados precisam ser
+idênticos aos do documento:
+
+| Campo | Regra |
+|---|---|
+| Razão social | A **razão social** do cartão CNPJ, não o nome fantasia nem a marca |
+| CNPJ | Ativo na Receita Federal |
+| Endereço | Endereço **registrado**, com a mesma formatação do documento. Nada de caixa postal |
+| Telefone | Precisa receber ligação ou SMS para o código |
+| Site | Domínio próprio, com e-mail no mesmo domínio, ajuda bastante |
+
+#### Documentos aceitos no Brasil
+
+- **Cartão CNPJ** (comprovante de inscrição da Receita Federal) — o principal
+- **Contrato Social** — para sociedades
+- **CCMEI** — o equivalente para MEI
+- **Comprovante de endereço** no nome da empresa (conta de luz, água, telefone)
+- Documento do **representante legal**
+
+Prazo: ⚠️ tipicamente **3 a 10 dias úteis**, mais em época de fila.
+
+#### Por que costuma ser recusado
+
+Por ordem de frequência:
+
+1. **Nome fantasia no lugar da razão social.** Se o cartão diz "MARIA SILVA
+   DESENVOLVIMENTO LTDA" e você digitou "AppAM", é recusa automática.
+2. **Endereço diferente.** Abreviação, complemento, CEP formatado de outro jeito.
+3. **Documento ilegível.** Foto cortada, tremida ou de baixa resolução. Use o PDF
+   original baixado do site da Receita.
+4. **Documento vencido.** Comprovante de endereço antigo.
+5. **Documento que mostra só o nome, sem o endereço.** Precisa dos dois.
+
+#### E se não houver CNPJ nenhum?
+
+Correção ao que escrevi antes: eu disse que "MEI tem CNPJ e costuma passar". É mais
+matizado. O MEI **tem** CNPJ e pode tentar, usando o CCMEI no lugar do Contrato Social
+— mas a taxa de recusa é maior, porque MEI costuma estar registrado em **endereço
+residencial** e o comprovante de endereço raramente sai no nome da empresa. Dá para
+passar; não conte com isso como certo.
+
+Sem nenhum CNPJ, as saídas reais são:
+
+- **Institucional.** Uma ONG, maternidade, banco de leite, UBS ou universidade parceira
+  abre a WABA no CNPJ dela e o projeto opera sob esse guarda-chuva. Para um serviço
+  materno-infantil isso normalmente é fácil de conseguir — e ainda melhora a confiança
+  da mãe, porque o nome exibido no WhatsApp passa a ser o da instituição.
+- **Abrir MEI.** Custa cerca de R$ 80/ano de DAS e sai no mesmo dia.
+- **Ficar não verificada** e rodar o piloto dentro do teto de 250 destinatários/24 h.
+
+Para o seu caso, a via institucional é a que eu perseguiria primeiro: resolve o CNPJ,
+resolve a credibilidade e ajuda na revisão clínica do conteúdo ao mesmo tempo.
 
 ---
 
@@ -441,7 +511,8 @@ Em ordem de impacto:
 
 ### P0 — antes de qualquer mãe real usar
 
-- [ ] Resolver o CNPJ e concluir a verificação de negócio da Meta
+- [ ] Resolver o CNPJ e concluir a verificação de negócio da Meta (§2.7) — ou decidir
+      rodar o piloto não verificado, dentro do teto de 250 destinatários/24 h
 - [ ] Comprar **um** número virtual e testar a verificação antes de contratar plano anual
 - [ ] Rodar `ingest_openai_kb.py` e guardar o `VECTOR_STORE_ID`
 - [ ] Gerar token permanente via System User (o de teste expira em 24 h)
@@ -475,6 +546,10 @@ Pesquisa de julho de 2026. Preço e política mudam; reconfirme o que estiver ma
 - [Meta is Updating WhatsApp Pricing on July 1, 2025 — Twilio](https://www.twilio.com/en-us/changelog/meta-is-updating-whatsapp-pricing-on-july-1--2025)
 - [WhatsApp Business API Pricing Brazil 2026 — Message Central](https://www.messagecentral.com/blog/whatsapp-business-api-pricing-brazil)
 - [Messaging Limits — Meta for Developers](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits)
+- [Sobre a verificação da empresa no Meta Business Suite](https://pt-br.facebook.com/business/help/1095661473946872)
+- [Why was my business verification submission rejected? — Meta](https://en-gb.facebook.com/business/help/2342133782492969)
+- [Meta recusou sua verificação de empresa? 7 correções](https://anylinga.com/blog/pt/meta-business-verification-rejected-7-fixes.html)
+- [Meta Verification Documents: What Gets Accepted (2026)](https://singhamandeep.com/meta-business-verification-documents-required/)
 - [Not All Chatbots Are Banned: WhatsApp's 2026 AI Policy Explained — respond.io](https://respond.io/blog/whatsapp-general-purpose-chatbots-ban)
 - [Meta bans general-purpose AI chatbots on WhatsApp Business — Dataslayer](https://www.dataslayer.ai/blog/meta-bans-general-purpose-ai-chatbots-on-whatsapp-business)
 - [WhatsApp Business Messaging Policy](https://business.whatsapp.com/policy)

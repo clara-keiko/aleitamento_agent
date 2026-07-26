@@ -1,0 +1,170 @@
+"""Geração de resposta com RAG e transcrição de áudio.
+
+A checagem de segurança da resposta mudou de abordagem. A versão anterior
+bloqueava a resposta se ela contivesse "medicamento", "prescrev" ou
+"diagnóstico" — o que derrubava justamente as respostas corretas, já que o
+material de apoio é sobre medicamentos na amamentação e o próprio modelo
+escreve "não posso prescrever". Trocamos por uma checagem de *fundamentação*:
+só entregamos a resposta se ela citar a base vetorial. Sem citação, tratamos
+como fora de escopo. Isso ataca alucinação, que é o risco real, em vez de
+punir a presença de uma palavra.
+"""
+
+from dataclasses import dataclass
+import io
+
+from openai import OpenAI, OpenAIError
+
+from app.config import Settings
+from app.logging_utils import get_logger
+
+log = get_logger(__name__)
+
+SYSTEM_PROMPT = """\
+Você é um assistente educativo sobre amamentação e cuidados com o bebê, \
+oferecido dentro de um serviço específico de apoio materno-infantil.
+
+Escopo e método:
+- Responda SOMENTE com base no conteúdo recuperado pela ferramenta de busca \
+nos arquivos. Sempre consulte os arquivos antes de responder.
+- Se o material recuperado não cobrir a pergunta, diga isso claramente e não \
+complete com conhecimento próprio.
+- Recuse assuntos fora de amamentação e cuidados com o bebê. Você não é um \
+assistente de uso geral.
+
+Limites clínicos:
+- Não faça diagnóstico.
+- Não indique dose, não prescreva e não recomende iniciar ou suspender \
+medicamento. Você pode explicar o que o material diz sobre compatibilidade \
+de substâncias com a amamentação, sempre orientando confirmar com o \
+profissional que acompanha o caso.
+- Não substitua avaliação profissional. Diante de sinal de alerta, oriente \
+procurar atendimento.
+
+Forma:
+- Português do Brasil, acolhedor, direto e sem jargão.
+- No máximo 6 linhas curtas. Use listas quando ajudar a leitura.
+- É WhatsApp: nada de títulos, markdown pesado ou texto longo demais.
+"""
+
+# Áudio de voz é opus (~8 KB/s). Teto generoso, só para barrar arquivo absurdo.
+AUDIO_BYTES_PER_SECOND = 16_000
+OPENAI_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024
+
+
+@dataclass
+class Answer:
+    text: str
+    grounded: bool
+    error: bool = False
+
+
+class AssistantEngine:
+    def __init__(self, settings: Settings, client: OpenAI | None = None):
+        self.settings = settings
+        self._client = client
+
+    @property
+    def client(self) -> OpenAI:
+        if self._client is None:
+            self._client = OpenAI(api_key=self.settings.openai_api_key)
+        return self._client
+
+    # ------------------------------------------------------------------
+    # Texto
+    # ------------------------------------------------------------------
+    def answer(self, user_text: str, history: list[dict] | None = None) -> Answer:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend(history or [])
+        messages.append({"role": "user", "content": user_text})
+
+        try:
+            response = self.client.responses.create(
+                model=self.settings.openai_model,
+                input=messages,
+                tools=[
+                    {
+                        "type": "file_search",
+                        "vector_store_ids": [self.settings.vector_store_id],
+                    }
+                ],
+            )
+        except OpenAIError as exc:
+            log.error("erro na chamada à OpenAI: %s", exc)
+            return Answer(text="", grounded=False, error=True)
+        except Exception as exc:  # noqa: BLE001 - rede/serialização inesperada
+            log.exception("erro inesperado ao gerar resposta: %s", exc)
+            return Answer(text="", grounded=False, error=True)
+
+        text = (getattr(response, "output_text", "") or "").strip()
+        if not text:
+            return Answer(text="", grounded=False, error=True)
+
+        return Answer(text=text, grounded=has_file_citations(response))
+
+    # ------------------------------------------------------------------
+    # Áudio
+    # ------------------------------------------------------------------
+    def transcribe(self, audio: bytes, mime: str = "audio/ogg") -> str:
+        max_bytes = min(
+            self.settings.max_audio_seconds * AUDIO_BYTES_PER_SECOND,
+            OPENAI_AUDIO_LIMIT_BYTES,
+        )
+        if not audio:
+            return ""
+        if len(audio) > max_bytes:
+            log.warning("áudio acima do limite (%s bytes); ignorando", len(audio))
+            return ""
+
+        buffer = io.BytesIO(audio)
+        buffer.name = f"audio.{_extension_for(mime)}"
+
+        try:
+            result = self.client.audio.transcriptions.create(
+                model=self.settings.transcribe_model,
+                file=buffer,
+                language="pt",
+            )
+        except OpenAIError as exc:
+            log.error("erro ao transcrever áudio: %s", exc)
+            return ""
+        except Exception as exc:  # noqa: BLE001
+            log.exception("erro inesperado ao transcrever áudio: %s", exc)
+            return ""
+
+        return (getattr(result, "text", "") or "").strip()
+
+
+def _extension_for(mime: str) -> str:
+    mapping = {
+        "audio/ogg": "ogg",
+        "audio/opus": "ogg",
+        "audio/mpeg": "mp3",
+        "audio/mp4": "m4a",
+        "audio/x-m4a": "m4a",
+        "audio/amr": "amr",
+        "audio/wav": "wav",
+        "audio/webm": "webm",
+    }
+    return mapping.get((mime or "").split(";")[0].strip(), "ogg")
+
+
+def has_file_citations(response) -> bool:
+    """True se a resposta cita ao menos um trecho da base vetorial."""
+    for item in getattr(response, "output", None) or []:
+        for content in getattr(item, "content", None) or []:
+            for annotation in getattr(content, "annotations", None) or []:
+                kind = getattr(annotation, "type", None)
+                if kind is None and isinstance(annotation, dict):
+                    kind = annotation.get("type")
+                if kind == "file_citation":
+                    return True
+    return False
+
+
+def fallback_message() -> str:
+    return (
+        "Não consegui consultar o material agora. Tente de novo em alguns minutos.\n\n"
+        "Se houver febre, dificuldade para respirar, sonolência fora do comum, "
+        "recusa em mamar ou piora, procure atendimento médico."
+    )

@@ -1,244 +1,127 @@
-from typing import Annotated
-import os
-import requests
+"""Entrypoint FastAPI do agente de aleitamento no WhatsApp.
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, Query, Request
-from fastapi.responses import PlainTextResponse
-from openai import OpenAI
-
-load_dotenv()
-
-app = FastAPI()
-
-# =========================
-# Variáveis de ambiente
-# =========================
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-VECTOR_STORE_ID = os.getenv("VECTOR_STORE_ID", "")
-
-if not WHATSAPP_TOKEN:
-    raise ValueError("WHATSAPP_TOKEN não configurado")
-
-if not PHONE_NUMBER_ID:
-    raise ValueError("PHONE_NUMBER_ID não configurado")
-
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY não configurado")
-
-if not VECTOR_STORE_ID:
-    raise ValueError("VECTOR_STORE_ID não configurado")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-# =========================
-# Prompt seguro
-# =========================
-SAFE_SYSTEM_PROMPT = """
-Você é um assistente educativo em puericultura e amamentação.
-
-Regras obrigatórias:
-- Responda apenas com base no conteúdo recuperado dos arquivos.
-- Não faça diagnóstico.
-- Não prescreva medicamentos.
-- Não substitua avaliação médica.
-- Não invente informações fora dos arquivos.
-- Se a base recuperada for insuficiente, diga isso claramente.
-- Seja breve, clara, conservadora e educativa.
-- Use português do Brasil.
+O webhook responde 200 imediatamente e processa a mensagem em background.
+Isso não é detalhe de performance: a Meta reentrega o evento quando o 200
+demora, e uma chamada com file_search leva vários segundos. Processando de
+forma síncrona, a mãe recebia a mesma resposta duas ou três vezes.
 """
 
-# =========================
-# Guardrails clínicos
-# =========================
-EMERGENCY_FLAGS = [
-    "não respira",
-    "nao respira",
-    "dificuldade para respirar",
-    "falta de ar",
-    "convuls",
-    "roxo",
-    "arroxeado",
-    "inconsciente",
-]
+import json
+from typing import Annotated
+from urllib.parse import parse_qsl
 
-REFER_MEDICAL_CARE_FLAGS = [
-    "febre",
-    "muito molinho",
-    "muito sonolento",
-    "não mama",
-    "nao mama",
-    "não quer mamar",
-    "nao quer mamar",
-    "desidrat",
-    "sem xixi",
-    "pouco xixi",
-    "sangue nas fezes",
-    "vomitando tudo",
-    "vomita tudo",
-    "pele muito amarela",
-]
+from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse
 
-def classify_risk(text: str) -> str:
-    t = text.lower()
+from app.channels import build_channel
+from app.channels.meta_cloud import MetaCloudChannel
+from app.config import PROVIDER_TWILIO, settings
+from app.llm import AssistantEngine
+from app.logging_utils import configure_logging, get_logger
+from app.pipeline import MessagePipeline
 
-    if any(flag in t for flag in EMERGENCY_FLAGS):
-        return "EMERGENCY_NOW"
+configure_logging()
+log = get_logger(__name__)
 
-    if any(flag in t for flag in REFER_MEDICAL_CARE_FLAGS):
-        return "REFER_MEDICAL_CARE"
+app = FastAPI(title="Agente de Aleitamento", version="2.0.0")
 
-    return "EDUCATIONAL_OK"
+channel = build_channel(settings)
+engine = AssistantEngine(settings)
+pipeline = MessagePipeline(settings, channel, engine)
 
-def emergency_message() -> str:
-    return (
-        "Isso pode ser uma urgência. "
-        "Procure atendimento médico de emergência imediatamente."
+if not settings.ready:
+    # Avisa alto, mas deixa o processo de pé: sem isso a plataforma reinicia
+    # em loop e o log do erro nunca chega a ser lido.
+    log.error(
+        "configuração incompleta, faltam: %s. /webhook vai recusar mensagens.",
+        ", ".join(settings.missing()),
     )
 
-def medical_referral_message() -> str:
-    return (
-        "Seu relato pode indicar um sinal de alerta. "
-        "Procure avaliação médica o quanto antes. "
-        "Se houver dificuldade para respirar, sonolência excessiva, febre, piora "
-        "ou recusa para mamar, busque atendimento imediatamente."
-    )
 
-# =========================
-# WhatsApp
-# =========================
-def send_whatsapp_text(to: str, body: str) -> None:
-    url = f"https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json",
-    }
+@app.get("/health")
+def health() -> JSONResponse:
+    missing = settings.missing()
     payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {"body": body},
+        "status": "ok" if not missing else "degraded",
+        "provider": settings.provider,
+        "model": settings.openai_model,
+        "audio": settings.enable_audio,
+        "signature_required": settings.require_signature,
+        "missing_env": missing,
     }
+    return JSONResponse(payload, status_code=200 if not missing else 503)
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    print("WHATSAPP SEND STATUS:", response.status_code)
-    print("WHATSAPP SEND BODY:", response.text)
 
-# =========================
-# OpenAI + file_search
-# =========================
-def generate_safe_reply(user_text: str) -> str:
-    try:
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            input=[
-                {"role": "system", "content": SAFE_SYSTEM_PROMPT},
-                {"role": "user", "content": user_text},
-            ],
-            tools=[
-                {
-                    "type": "file_search",
-                    "vector_store_ids": [VECTOR_STORE_ID],
-                }
-            ],
-        )
-
-        answer = response.output_text.strip()
-
-        # pós-checagem simples
-        lowered = answer.lower()
-        blocked_terms = ["diagnóstico", "diagnostico", "prescrev", "medicamento"]
-
-        if any(term in lowered for term in blocked_terms):
-            return (
-                "Posso ajudar apenas com orientação educativa geral com base nos materiais aprovados. "
-                "Se houver preocupação clínica, procure avaliação médica."
-            )
-
-        return answer
-
-    except Exception as e:
-        print("OPENAI ERROR:", str(e))
-        return (
-            "No momento só posso oferecer orientação educativa geral limitada. "
-            "Se houver febre, dificuldade para respirar, piora, sonolência excessiva "
-            "ou recusa para mamar, procure atendimento médico."
-        )
-
-# =========================
-# Webhook GET (validação Meta)
-# =========================
 @app.get("/webhook", response_class=PlainTextResponse)
 def verify_webhook(
     hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
     hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
 ):
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN and hub_challenge:
-        return hub_challenge
+    """Handshake de verificação da Meta (não usado pela Twilio)."""
+    if not isinstance(channel, MetaCloudChannel):
+        return PlainTextResponse("Not Found", status_code=404)
 
+    if channel.verify_challenge(hub_mode, hub_verify_token) and hub_challenge:
+        return PlainTextResponse(hub_challenge)
+
+    log.warning("handshake de verificação recusado")
     return PlainTextResponse("Forbidden", status_code=403)
 
-# =========================
-# Webhook POST (mensagens)
-# =========================
+
 @app.post("/webhook")
-async def receive_webhook(request: Request):
-    data = await request.json()
-    print("EVENTO:", data)
+async def receive_webhook(request: Request, background: BackgroundTasks) -> Response:
+    raw_body = await request.body()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+
+    # A Twilio assina a URL pública; atrás de proxy, request.url pode vir
+    # como http:// interno e invalidar a assinatura.
+    if settings.public_base_url:
+        signed_url = settings.public_base_url.rstrip("/") + request.url.path
+        if request.url.query:
+            signed_url += f"?{request.url.query}"
+    else:
+        signed_url = str(request.url)
+
+    if not channel.verify_signature(raw_body, headers, signed_url):
+        log.warning("assinatura inválida no webhook; descartando")
+        return JSONResponse({"status": "forbidden"}, status_code=403)
+
+    if not settings.ready:
+        log.error("mensagem descartada: configuração incompleta (%s)", settings.missing())
+        return JSONResponse({"status": "not_configured"}, status_code=503)
+
+    payload = _decode_body(raw_body, headers)
+    if payload is None:
+        return JSONResponse({"status": "ignored"}, status_code=200)
+
+    for message in channel.parse_webhook(payload):
+        background.add_task(_safe_handle, message)
+
+    # Confirma na hora; o trabalho pesado corre depois da resposta.
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
+def _decode_body(raw_body: bytes, headers: dict) -> dict | None:
+    content_type = headers.get("content-type", "")
+
+    if settings.provider == PROVIDER_TWILIO or "application/x-www-form-urlencoded" in content_type:
+        try:
+            return dict(parse_qsl(raw_body.decode("utf-8"), keep_blank_values=True))
+        except UnicodeDecodeError:
+            log.warning("corpo do webhook não é utf-8; descartando")
+            return None
 
     try:
-        entry = data.get("entry", [])
-        if not entry:
-            return {"status": "ok"}
+        return json.loads(raw_body or b"{}")
+    except (ValueError, UnicodeDecodeError):
+        log.warning("corpo do webhook não é JSON válido; descartando")
+        return None
 
-        changes = entry[0].get("changes", [])
-        if not changes:
-            return {"status": "ok"}
 
-        value = changes[0].get("value", {})
-
-        # 1) status de mensagens enviadas pela empresa
-        if "statuses" in value:
-            print("STATUS EVENT:", value["statuses"])
-            return {"status": "ok"}
-
-        # 2) mensagens recebidas do usuário
-        if "messages" not in value:
-            return {"status": "ok"}
-
-        msg = value["messages"][0]
-
-        # tratar só texto no MVP
-        if msg.get("type") != "text":
-            return {"status": "ok"}
-
-        phone = msg["from"]
-        text = msg["text"]["body"]
-
-        print("PHONE:", phone)
-        print("TEXT:", text)
-
-        # Guardrail 1: risco clínico antes da IA
-        risk = classify_risk(text)
-        print("RISK:", risk)
-
-        if risk == "EMERGENCY_NOW":
-            send_whatsapp_text(phone, emergency_message())
-            return {"status": "ok"}
-
-        if risk == "REFER_MEDICAL_CARE":
-            send_whatsapp_text(phone, medical_referral_message())
-            return {"status": "ok"}
-
-        # Guardrail 2: só casos liberados chegam à IA
-        reply = generate_safe_reply(text)
-        send_whatsapp_text(phone, reply)
-
-    except Exception as e:
-        print("WEBHOOK ERROR:", str(e))
-
-    return {"status": "ok"}
+def _safe_handle(message) -> None:
+    """Uma exceção aqui roda fora do ciclo da requisição e sumiria calada."""
+    try:
+        pipeline.handle(message)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("falha ao processar mensagem: %s", exc)

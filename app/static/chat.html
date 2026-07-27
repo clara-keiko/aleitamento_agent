@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Assistente de Aleitamento — protótipo</title>
+<!-- Favicon embutido: evita o 404 de /favicon.ico poluindo o log da demo. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤱</text></svg>">
 <style>
   :root {
     --bg: #ece5dd;
@@ -341,7 +343,18 @@ form.onsubmit = async (e) => {
       return;
     }
     if (!resposta.ok) {
-      bolha('Erro ' + resposta.status + '. Verifique o log do servidor.', 'in');
+      // Mostra a causa em vez de só o número. Um 503 aqui quase sempre é
+      // variável de ambiente faltando, e o servidor já diz qual.
+      let detalhe = '';
+      try {
+        const erro = await resposta.json();
+        if (erro.missing_env && erro.missing_env.length) {
+          detalhe = '\n\nFaltam no seu .env:\n• ' + erro.missing_env.join('\n• ');
+        } else if (erro.error) {
+          detalhe = '\n\n(' + erro.error + ')';
+        }
+      } catch (_) { /* resposta sem JSON */ }
+      bolha('Erro ' + resposta.status + '.' + detalhe, 'in');
       return;
     }
 

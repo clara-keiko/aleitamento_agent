@@ -98,37 +98,51 @@ class Settings:
     )
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "INFO").upper())
 
-    def missing(self) -> list[str]:
-        """Variáveis obrigatórias que faltam, dado o provedor escolhido."""
+    def missing_core(self) -> list[str]:
+        """O que *qualquer* canal precisa: o cérebro do agente.
+
+        Só isto é exigido pelo protótipo web. Pedir credencial de WhatsApp
+        para conversar no navegador contradiz o motivo de o protótipo
+        existir — validar o conteúdo antes de haver número.
+        """
         required = {
             "OPENAI_API_KEY": self.openai_api_key,
             "VECTOR_STORE_ID": self.vector_store_id,
         }
+        return sorted(name for name, value in required.items() if not value)
 
+    def missing_channel(self) -> list[str]:
+        """O que o canal de WhatsApp precisa, além do núcleo."""
         if self.provider == PROVIDER_TWILIO:
-            required.update(
-                {
-                    "TWILIO_ACCOUNT_SID": self.twilio_account_sid,
-                    "TWILIO_AUTH_TOKEN": self.twilio_auth_token,
-                    "TWILIO_WHATSAPP_FROM": self.twilio_whatsapp_from,
-                }
-            )
+            required = {
+                "TWILIO_ACCOUNT_SID": self.twilio_account_sid,
+                "TWILIO_AUTH_TOKEN": self.twilio_auth_token,
+                "TWILIO_WHATSAPP_FROM": self.twilio_whatsapp_from,
+            }
         else:
-            required.update(
-                {
-                    "VERIFY_TOKEN": self.verify_token,
-                    "WHATSAPP_TOKEN": self.whatsapp_token,
-                    "PHONE_NUMBER_ID": self.phone_number_id,
-                }
-            )
+            required = {
+                "VERIFY_TOKEN": self.verify_token,
+                "WHATSAPP_TOKEN": self.whatsapp_token,
+                "PHONE_NUMBER_ID": self.phone_number_id,
+            }
             if self.require_signature:
                 required["APP_SECRET"] = self.app_secret
 
         return sorted(name for name, value in required.items() if not value)
 
+    def missing(self) -> list[str]:
+        """Tudo que falta para o WhatsApp funcionar."""
+        return sorted(set(self.missing_core()) | set(self.missing_channel()))
+
     @property
     def ready(self) -> bool:
+        """Pronto para o WhatsApp."""
         return not self.missing()
+
+    @property
+    def web_ready(self) -> bool:
+        """Pronto para o protótipo no navegador."""
+        return not self.missing_core()
 
 
 settings = Settings()

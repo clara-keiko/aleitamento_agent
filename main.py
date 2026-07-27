@@ -57,6 +57,12 @@ def _status_payload() -> dict:
         "model": settings.openai_model,
         "audio": settings.enable_audio,
         "signature_required": settings.require_signature,
+        # Separados de propósito: o protótipo web funciona sem as credenciais
+        # de WhatsApp, então dá para estar pronto para um e não para o outro.
+        "web_ready": settings.web_ready,
+        "whatsapp_ready": settings.ready,
+        "missing_for_web": settings.missing_core(),
+        "missing_for_whatsapp": settings.missing(),
         "missing_env": missing,
     }
 
@@ -120,9 +126,12 @@ async def chat_api(request: Request) -> Response:
     if not _web_access_allowed(headers):
         return JSONResponse({"error": "codigo_invalido"}, status_code=401)
 
-    if not settings.ready:
+    # Só o núcleo: o protótipo web não usa credencial de WhatsApp.
+    if not settings.web_ready:
+        faltando = settings.missing_core()
+        log.error("protótipo web sem configuração: faltam %s", ", ".join(faltando))
         return JSONResponse(
-            {"error": "nao_configurado", "missing_env": settings.missing()},
+            {"error": "nao_configurado", "missing_env": faltando},
             status_code=503,
         )
 

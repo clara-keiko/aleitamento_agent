@@ -134,6 +134,71 @@ class TestValidacaoDeEntrada:
         assert resposta.status_code == 400
 
 
+class TestNaoExigeCredenciaisDeWhatsApp:
+    """Regressão: /api/chat devolvia 503 sem as variáveis do WhatsApp.
+
+    O protótipo existe justamente para validar conteúdo *antes* de haver
+    número. Exigir credencial da Meta contradiz o motivo dele existir.
+    """
+
+    @pytest.fixture
+    def so_openai(self, monkeypatch):
+        for nome in [
+            "APP_SECRET", "VERIFY_TOKEN", "WHATSAPP_TOKEN", "PHONE_NUMBER_ID",
+            "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM",
+            "WEB_ACCESS_CODE",
+        ]:
+            monkeypatch.delenv(nome, raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+        monkeypatch.setenv("VECTOR_STORE_ID", "vs-teste")
+
+        import app.config
+
+        importlib.reload(app.config)
+        import main
+
+        importlib.reload(main)
+
+        from app.llm import Answer
+
+        main.web_pipeline.engine.answer = lambda t, history=None: Answer(
+            text="Resposta da base.", grounded=True
+        )
+        with TestClient(main.app) as c:
+            yield c
+
+    def test_chat_funciona_sem_nada_de_whatsapp(self, so_openai):
+        resposta = so_openai.post(
+            "/api/chat", json={"session": "s1", "text": "como está a pega?"}
+        )
+        assert resposta.status_code == 200
+        assert resposta.json()["outcome"] == "respondido"
+
+    def test_health_separa_os_dois_prontos(self, so_openai):
+        dados = so_openai.get("/health").json()
+        assert dados["web_ready"] is True
+        assert dados["whatsapp_ready"] is False
+        assert dados["missing_for_web"] == []
+        assert "WHATSAPP_TOKEN" in dados["missing_for_whatsapp"]
+
+    def test_sem_vector_store_o_503_diz_o_que_falta(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+        monkeypatch.delenv("VECTOR_STORE_ID", raising=False)
+        monkeypatch.delenv("WEB_ACCESS_CODE", raising=False)
+
+        import app.config
+
+        importlib.reload(app.config)
+        import main
+
+        importlib.reload(main)
+
+        with TestClient(main.app) as c:
+            resposta = c.post("/api/chat", json={"session": "s", "text": "oi"})
+            assert resposta.status_code == 503
+            assert resposta.json()["missing_env"] == ["VECTOR_STORE_ID"]
+
+
 class TestCodigoDeAcesso:
     @pytest.fixture
     def protegido(self, monkeypatch):

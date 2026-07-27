@@ -68,8 +68,8 @@
   }
   .title { font-weight: 600; }
   .subtitle { font-size: 12px; opacity: .8; }
+  .actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
   .toggle {
-    margin-left: auto;
     background: rgba(255,255,255,.15);
     border: 0; color: inherit; font: inherit; font-size: 12px;
     padding: 6px 10px; border-radius: 999px; cursor: pointer;
@@ -181,9 +181,12 @@
       <div class="title">Assistente de Aleitamento</div>
       <div class="subtitle" id="status">protótipo · não é atendimento médico</div>
     </div>
-    <button class="toggle" id="inspect" aria-pressed="false" title="Mostra qual camada respondeu">
-      inspeção
-    </button>
+    <div class="actions">
+      <button class="toggle" id="inspect" aria-pressed="false"
+              title="Mostra qual camada respondeu cada mensagem">inspeção</button>
+      <button class="toggle" id="reset"
+              title="Começa uma conversa nova, do zero">reiniciar</button>
+    </div>
   </header>
 
   <div class="banner">
@@ -285,6 +288,16 @@ inspect.onclick = () => {
   localStorage.setItem('inspecting', inspecting ? '1' : '0');
   inspect.setAttribute('aria-pressed', String(inspecting));
   document.querySelectorAll('.meta').forEach(m => { m.hidden = !inspecting; });
+};
+
+// Nova sessão = estado limpo no servidor também (histórico, boas-vindas,
+// rate limit são todos por sessão). Essencial para repetir uma demo.
+document.getElementById('reset').onclick = () => {
+  session = 'web-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('session', session);
+  log.replaceChildren();
+  input.value = '';
+  input.focus();
 };
 
 function digitando() {

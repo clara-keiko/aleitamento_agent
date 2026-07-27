@@ -7,6 +7,9 @@ com triagem clínica antes do modelo e recusa explícita fora do escopo.
 > **Não faz diagnóstico, não prescreve e não substitui avaliação profissional.**
 > Sinais de emergência interrompem o fluxo e encaminham para o 192.
 
+🎬 **[docs/DEMO.md](docs/DEMO.md)** — roteiro de apresentação em 5 minutos, com plano B.
+Antes de apresentar, rode `python scripts/preflight.py` (veredito GO / NO-GO).
+
 📋 **[docs/GO_LIVE.md](docs/GO_LIVE.md)** — checklist para colocar no ar, das duas
 trilhas paralelas (burocracia da Meta × técnica) até o piloto.
 

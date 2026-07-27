@@ -135,6 +135,42 @@ qualquer mãe real usar."
 
 ---
 
+## Variante: quando a plateia é o time
+
+O time não precisa ser convencido de que amamentação importa — precisa entender o que
+está pronto, o que não está e onde as decisões foram tomadas. Ajustes:
+
+- **Encurte o Ato 1.** Uma pergunta basta; eles vão entender na hora.
+- **Alongue o Ato 2 e o Ato 4.** A distinção relato × dúvida e a checagem de
+  fundamentação são as decisões de projeto que valem discutir.
+- **Mostre o terminal desde o começo**, com o log rolando. É o que dá credibilidade
+  técnica, e a linha por mensagem mostra a pseudonimização na prática.
+- **Rode o eval ao vivo** — é o argumento mais forte para um time:
+
+  ```bash
+  python evals/run_eval.py
+  ```
+
+  47 casos, 8 de emergência, roda no CI a cada commit. Diga: "se alguém quebrar o
+  reconhecimento de emergência, o build falha e ninguém consegue fazer merge."
+
+- **Seja explícito sobre o que falta.** Para o time isso constrói confiança, não a
+  destrói: a validação clínica não foi feita, a memória é em processo (não escala para
+  múltiplas instâncias), o áudio não existe no protótipo web, e o `file_search` é uma
+  caixa-preta que ainda não medimos.
+- **Traga uma decisão para eles opinarem.** A melhor é a de modelo: `gpt-4o-mini` é de
+  2024, `gpt-5-mini` dobra o custo para US$ 24/mês a mil mães. Mostre que dá para
+  decidir com dado, não com opinião:
+
+  ```bash
+  python evals/run_eval.py --live --model gpt-5-mini
+  ```
+
+Termine pedindo o que você precisa deles: quem consegue a consultora de amamentação,
+e quem toca a verificação de negócio na Meta.
+
+---
+
 ## Perguntas prováveis
 
 **"E se ele inventar uma resposta errada?"**

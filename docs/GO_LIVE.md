@@ -65,47 +65,142 @@ no app comum nem no Business. Se já teve, apague a conta antes e aguarde.
 
 ### B1. App e número de teste
 
-`developers.facebook.com` → **Criar app** → tipo **Business** → adicionar o produto
-**WhatsApp**.
+1. `developers.facebook.com` → **Meus apps** → **Criar app**
+2. Caso de uso: **Outro** → tipo **Empresa** (*Business*)
+3. Vincule ao portfólio empresarial criado em A1
+4. No painel do app → **Adicionar produto** → **WhatsApp** → **Configurar**
 
-A Meta entrega na hora um número de teste e o `PHONE_NUMBER_ID`. Anote também o
-**App Secret** (Configurações → Básico) — é ele que assina o webhook.
+A tela *Início rápido da API* entrega tudo de uma vez. Anote:
 
-⚠️ O token que aparece nessa tela **expira em 24 h**. Serve para hoje; o permanente
-vem no passo C2.
+| Onde aparece | O que é | Vai para |
+|---|---|---|
+| "Identificação do número de telefone" | número de teste | `PHONE_NUMBER_ID` |
+| "Token de acesso temporário" | ⚠️ expira em 24 h | `WHATSAPP_TOKEN` |
+| Configurações → Básico → *Chave secreta do app* | assina o webhook | `APP_SECRET` |
+
+Ainda nessa tela, em **Para**, clique em *Gerenciar lista de números* e **cadastre o
+seu celular** (até 5). Chega um código por WhatsApp para confirmar.
+
+Os outros dois valores você inventa:
+
+```bash
+# Token do handshake do webhook — qualquer string, você repete no painel
+openssl rand -hex 16
+# Chave que pseudonimiza telefones no log
+openssl rand -hex 32
+```
+
+### B1.5. Prove que o número funciona *antes* de subir código
+
+Vale muito fazer isto primeiro: isola problema de credencial de problema de
+aplicação. Se falhar aqui, não adianta debugar o servidor.
+
+```bash
+export TOKEN="EAAG..."        # token temporário
+export PHONE_ID="123456789"   # PHONE_NUMBER_ID
+export MEU_CEL="5511999999999"  # seu número, com 55, sem + e sem espaços
+
+curl -X POST "https://graph.facebook.com/v25.0/$PHONE_ID/messages" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"messaging_product\":\"whatsapp\",\"to\":\"$MEU_CEL\",
+       \"type\":\"template\",
+       \"template\":{\"name\":\"hello_world\",\"language\":{\"code\":\"en_US\"}}}"
+```
+
+⚠️ **Repare que é `template`, não `text`.** Esta é a pegadinha que mais trava gente no
+primeiro dia: fora de uma janela de 24 h aberta pelo usuário, **só template passa**.
+Texto livre só funciona *depois* que a pessoa te mandou uma mensagem. Se você tentar
+`type: text` de cara, recebe erro e parece que a credencial está errada — não está.
+
+Chegou o "Hello World" no seu celular? Credenciais OK.
 
 ### B2. Indexar a base
 
 ```bash
-cp .env.example .env      # preencha OPENAI_API_KEY
+cp .env.example .env
+# preencha ao menos OPENAI_API_KEY
 python ingest_openai_kb.py
 ```
 
-Guarde o `VECTOR_STORE_ID` impresso no final. O script é idempotente: rodar de novo
-não duplica nem cobra a mais.
+Saída esperada: 17 arquivos, `Status do lote: completed`, `falharam: 0`, e o
+`VECTOR_STORE_ID` no final.
 
-### B3. Deploy
+Se algum arquivo falhar, o script **para com erro** e lista quais. Não ignore: base
+incompleta vira "não encontrei isso no material" para a mãe, sem ninguém entender
+por quê. O script é idempotente — rodar de novo não duplica nem cobra a mais.
 
-Render, plano **Starter** (o free hiberna e perde o primeiro webhook). Preencha as
-variáveis conforme o `render.yaml`.
+### B3. Subir o serviço
 
-Confirme que subiu:
+Duas opções. **Túnel local** é melhor para o primeiro dia: você vê o log em tempo real
+e itera em segundos, sem esperar redeploy.
+
+<details>
+<summary><b>Opção 1 — túnel local (iteração rápida)</b></summary>
 
 ```bash
-curl https://SEU-APP.onrender.com/health/ready
+pip install -r requirements-dev.txt
+uvicorn main:app --reload --port 8000
+
+# noutro terminal
+cloudflared tunnel --url http://localhost:8000    # ou: ngrok http 8000
+```
+
+Use a URL pública que o túnel imprime no passo B4. Ela muda a cada reinício do túnel —
+por isso não serve para produção.
+</details>
+
+<details>
+<summary><b>Opção 2 — Render (o que vai para produção)</b></summary>
+
+Novo *Web Service* apontando para o repositório. O `render.yaml` já traz build, start
+e healthcheck. Plano **Starter**: o free hiberna após 15 min e perde o primeiro
+webhook depois da pausa.
+
+Variáveis a preencher no painel:
+
+| Variável | Valor |
+|---|---|
+| `WHATSAPP_PROVIDER` | `meta` |
+| `PHONE_NUMBER_ID` | da tela B1 |
+| `WHATSAPP_TOKEN` | da tela B1 |
+| `APP_SECRET` | Configurações → Básico |
+| `VERIFY_TOKEN` | o `openssl rand -hex 16` |
+| `PSEUDONYM_KEY` | gerado automaticamente pelo `render.yaml` |
+| `OPENAI_API_KEY` | sua chave |
+| `VECTOR_STORE_ID` | saída do B2 |
+</details>
+
+Confirme antes de seguir:
+
+```bash
+curl https://SUA-URL/health/ready
 # {"status":"ok", ..., "missing_env":[]}
 ```
 
-Se vier `503`, o `missing_env` diz exatamente o que falta.
+`503` não é falha de deploy: o campo `missing_env` lista exatamente o que falta.
 
 ### B4. Assinar o webhook
 
-No painel do app → **WhatsApp** → **Configuração**:
+Painel do app → **WhatsApp** → **Configuração** → seção *Webhook* → **Editar**:
 
-- **URL de callback:** `https://SEU-APP.onrender.com/webhook`
+- **URL de retorno de chamada:** `https://SUA-URL/webhook`
 - **Token de verificação:** o mesmo valor de `VERIFY_TOKEN`
-- Clique em **Verificar e salvar** (deve ficar verde na hora)
-- Em *Campos do webhook*, assine **`messages`** — sem isso nada chega
+- **Verificar e salvar** — fica verde na hora, ou não salva
+
+Se recusar, teste o handshake você mesmo e compare:
+
+```bash
+curl "https://SUA-URL/webhook?hub.mode=subscribe\
+&hub.verify_token=SEU_VERIFY_TOKEN&hub.challenge=12345"
+# tem que responder exatamente: 12345
+```
+
+Depois de salvar, em **Campos do webhook** clique em *Gerenciar* e **assine
+`messages`**.
+
+⚠️ Este é o erro silencioso mais comum de todos: webhook verificado, tudo verde, e
+nenhuma mensagem chega — porque o campo `messages` não foi assinado. Não existe aviso.
 
 ### B5. Testar de ponta a ponta
 
@@ -122,6 +217,38 @@ mensagens reais. O que precisa acontecer:
 - [ ] `"qual a capital da França?"` → recusa fora de escopo
 - [ ] `SAIR` → confirma que apagou o histórico
 - [ ] Nos logs: telefone aparece como `u_xxxxxxxx`, nunca em claro
+
+**Importante:** aqui você manda mensagem *primeiro*, o que abre a janela de 24 h. Por
+isso o agente responde com texto livre normalmente — não precisa de template.
+
+Cada mensagem gera uma linha de log assim:
+
+```
+INFO app.pipeline processado user=u_09dfcccad8c3 outcome=respondido kind=text duracao_ms=2841
+```
+
+O campo `outcome` é o seu painel de controle:
+
+| `outcome` | Significa |
+|---|---|
+| `respondido` | Resposta veio da base, com citação |
+| `respondido_com_nota` | Tema sensível: respondeu e anexou o alerta |
+| `emergencia` / `encaminhamento` | Triagem clínica agiu, modelo nem foi chamado |
+| `social` | Saudação ou agradecimento |
+| `fora_de_escopo` | Modelo não citou a base — recusou |
+| `erro_modelo` | Timeout ou falha na OpenAI |
+| `duplicada` | Reentrega da Meta, corretamente ignorada |
+
+#### Se algo não funcionar
+
+| Sintoma | Causa provável |
+|---|---|
+| Nada acontece, log vazio | Campo `messages` não assinado (B4) |
+| `403` no log do servidor | `APP_SECRET` diferente do painel |
+| Recebe, mas não responde | Token expirado (24 h) — gere outro |
+| Tudo vira `fora_de_escopo` | `VECTOR_STORE_ID` errado ou base vazia |
+| Resposta duplicada | Não deveria ocorrer; abra issue com o log |
+| `duracao_ms` > 10000 | Reduza `MAX_RETRIEVAL_RESULTS` |
 
 ### B6. Escolher o modelo com dado
 

@@ -38,14 +38,29 @@ WhatsApp ──► /webhook ──► assinatura ──► 200 imediato
 A triagem roda **antes** do modelo de propósito: uma emergência não pode depender de a
 OpenAI estar no ar.
 
-## Rodando local
+## Protótipo no navegador
+
+O agente roda em `/chat` **sem precisar de WhatsApp** — sem app na Meta, sem número,
+sem verificação. Mesmo pipeline, mesma triagem, mesma base: o que for validado aqui é
+o que a mãe recebe lá.
 
 ```bash
 pip install -r requirements-dev.txt
-cp .env.example .env      # preencha as chaves
+cp .env.example .env         # OPENAI_API_KEY e VECTOR_STORE_ID bastam
 python ingest_openai_kb.py   # indexa docs/ e imprime o VECTOR_STORE_ID
 uvicorn main:app --reload
+# http://localhost:8000/chat
 ```
+
+O botão **inspeção** mostra qual camada respondeu cada mensagem — é o que distingue
+"a resposta está errada" de "a triagem interceptou".
+
+⚠️ Antes de publicar o link, defina `WEB_ACCESS_CODE` (`openssl rand -hex 8`). Sem ele,
+qualquer pessoa com a URL gasta sua cota da OpenAI.
+
+## Rodando local
+
+Para o WhatsApp, siga [docs/GO_LIVE.md](docs/GO_LIVE.md).
 
 Sem `.env` completo o serviço **sobe assim mesmo** e o `/health` diz o que falta:
 
@@ -117,14 +132,25 @@ app/llm.py            RAG e transcrição; checagem de fundamentação
 app/pipeline.py       orquestra a mensagem até a resposta
 app/memory.py         histórico, usuários conhecidos, dedup, rate limit
 app/http.py           POST com retry e backoff
-app/channels/         Meta Cloud API e Twilio atrás da mesma interface
+app/channels/         Meta Cloud API, Twilio e web atrás da mesma interface
+app/static/chat.html  protótipo de chat no navegador
 app/logging_utils.py  log sem dado pessoal
 evals/                conjunto dourado + runner de avaliação
 docs/                 base de conhecimento + OPERACAO.md
 tests/                120 testes
 ```
 
-Dois endpoints de saúde, com papéis diferentes:
+Endpoints:
+
+| Rota | Para quê |
+|---|---|
+| `GET /chat` | Protótipo de chat no navegador |
+| `POST /api/chat` | API do protótipo (`{session, text}` → `{replies, outcome}`) |
+| `GET/POST /webhook` | WhatsApp (handshake e mensagens) |
+| `GET /health` | Liveness |
+| `GET /health/ready` | Readiness |
+
+Os dois endpoints de saúde têm papéis diferentes:
 
 - `GET /health` — **liveness**, sempre 200 se o processo está de pé. É o que a
   plataforma monitora. Não devolve 503 por configuração incompleta de propósito:

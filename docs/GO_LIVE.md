@@ -8,10 +8,54 @@ espera, mas **não bloqueia nada do lado técnico** — o número de teste permi
 e validar a aplicação inteira hoje. Não fique esperando a verificação para começar.
 
 ```
-Trilha A (burocracia)   ──── 3 a 10 dias úteis ────┐
-                                                   ├──► convergência ──► piloto
-Trilha B (técnica)      ──── dá para fazer hoje ───┘
+Trilha 0 (protótipo web) ─── hoje, sem a Meta ──┐
+                                                 │
+Trilha A (burocracia)   ──── 3 a 10 dias úteis ──┤─► convergência ──► piloto
+                                                 │
+Trilha B (WhatsApp)     ──── dá para fazer hoje ─┘
 ```
+
+---
+
+## Trilha 0 — protótipo web (comece por aqui)
+
+O agente roda no navegador **sem nenhum envolvimento da Meta**: sem app, sem número,
+sem verificação. Mesmo pipeline, mesma triagem clínica, mesma base, mesmas respostas —
+só o canal muda.
+
+```bash
+pip install -r requirements-dev.txt
+cp .env.example .env          # OPENAI_API_KEY e VECTOR_STORE_ID bastam
+python ingest_openai_kb.py    # se ainda não indexou
+uvicorn main:app --reload
+# abra http://localhost:8000/chat
+```
+
+Para deixar no ar e mandar o link para a consultora: publique no Render (§B3) e
+**defina `WEB_ACCESS_CODE`** — sem ele, quem tiver o link gasta sua cota da OpenAI.
+
+```bash
+openssl rand -hex 8   # use como WEB_ACCESS_CODE
+```
+
+**Por que isso importa mais do que parece:** a validação clínica é o item mais lento e
+mais crítico do projeto, e era o único que dependia de você ter WhatsApp funcionando.
+Não depende mais. A consultora abre um link, conversa com o agente e aprova ou corrige
+— enquanto a verificação da Meta ainda está na fila.
+
+O botão **inspeção**, no topo, mostra qual camada respondeu cada mensagem
+(`emergencia`, `encaminhamento`, `respondido`, `fora_de_escopo`…). É o que permite
+distinguir "a resposta está errada" de "a triagem interceptou".
+
+Diferenças em relação ao WhatsApp, para você não se surpreender depois:
+
+| | Protótipo web | WhatsApp |
+|---|---|---|
+| Triagem, RAG, fundamentação | idênticos | idênticos |
+| Quebra de mensagem longa | igual (mesmos balões) | igual |
+| Áudio | ainda não | funciona |
+| Identidade | sessão anônima no navegador | número de telefone |
+| Resposta | mesma requisição | assíncrona, por webhook |
 
 ---
 

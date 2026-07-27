@@ -42,13 +42,19 @@ class MessagePipeline:
         )
         self.known_users = known_users or KnownUsers()
 
-    def handle(self, message: IncomingMessage) -> None:
+    def handle(self, message: IncomingMessage) -> str:
+        """Processa a mensagem e devolve o desfecho.
+
+        O desfecho é o mesmo valor que vai para o log — e é o que o protótipo
+        web mostra no modo de inspeção, para dar para ver *qual* camada agiu.
+        """
         started = time.monotonic()
         user = pseudonymize(message.sender)
         outcome = "unknown"
 
         try:
             outcome = self._handle(message, user)
+            return outcome
         finally:
             # Uma linha por mensagem, sem dado pessoal: é o que permite medir
             # taxa de fora-de-escopo, disparo de guardrail e latência.

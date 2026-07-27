@@ -75,6 +75,12 @@ class Settings:
     )
     max_output_tokens: int = field(default_factory=lambda: _env_int("MAX_OUTPUT_TOKENS", 500))
 
+    # Protótipo web. Serve a mesma lógica do WhatsApp no navegador, para
+    # validar conteúdo antes de existir número.
+    enable_web: bool = field(default_factory=lambda: _env_bool("ENABLE_WEB", True))
+    # Sem código, uma URL pública deixa qualquer um gastar sua cota da OpenAI.
+    web_access_code: str = field(default_factory=lambda: _env("WEB_ACCESS_CODE"))
+
     # Comportamento
     enable_audio: bool = field(default_factory=lambda: _env_bool("ENABLE_AUDIO", True))
     # Turnos (usuário + assistente) mantidos como contexto curto por telefone.

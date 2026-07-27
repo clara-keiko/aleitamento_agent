@@ -31,6 +31,11 @@ services:
         value: "45"
       - key: MAX_RETRIEVAL_RESULTS
         value: "8"
+      - key: ENABLE_WEB
+        value: "true"
+      # Defina no painel antes de compartilhar o link do protótipo.
+      - key: WEB_ACCESS_CODE
+        sync: false
       - key: ENABLE_AUDIO
         value: "true"
       - key: REQUIRE_SIGNATURE

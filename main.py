@@ -6,15 +6,18 @@ demora, e uma chamada com file_search leva vários segundos. Processando de
 forma síncrona, a mãe recebia a mesma resposta duas ou três vezes.
 """
 
+import hmac
 import json
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import parse_qsl
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
 from app.channels import build_channel
 from app.channels.meta_cloud import MetaCloudChannel
+from app.channels.web import WebChannel
 from app.config import PROVIDER_TWILIO, settings
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
@@ -23,11 +26,19 @@ from app.pipeline import MessagePipeline
 configure_logging()
 log = get_logger(__name__)
 
-app = FastAPI(title="Agente de Aleitamento", version="2.0.0")
+app = FastAPI(title="Agente de Aleitamento", version="2.1.0")
 
 channel = build_channel(settings)
 engine = AssistantEngine(settings)
 pipeline = MessagePipeline(settings, channel, engine)
+
+# Protótipo web: mesmo motor, mesmo pipeline, canal diferente. Ganha o próprio
+# MessagePipeline só para que histórico e rate limit do navegador não se
+# misturem com os do WhatsApp.
+web_channel = WebChannel()
+web_pipeline = MessagePipeline(settings, web_channel, engine)
+
+CHAT_HTML = Path(__file__).parent / "app" / "static" / "chat.html"
 
 if not settings.ready:
     # Avisa alto, mas deixa o processo de pé: sem isso a plataforma reinicia
@@ -68,6 +79,79 @@ def readiness() -> JSONResponse:
     payload = _status_payload()
     return JSONResponse(payload, status_code=200 if not payload["missing_env"] else 503)
 
+
+# ----------------------------------------------------------------------
+# Protótipo web
+# ----------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+def root() -> Response:
+    if settings.enable_web:
+        return RedirectResponse("/chat")
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_ui() -> Response:
+    if not settings.enable_web:
+        return PlainTextResponse("Not Found", status_code=404)
+    return HTMLResponse(CHAT_HTML.read_text(encoding="utf-8"))
+
+
+def _web_access_allowed(headers: dict) -> bool:
+    """Sem código configurado, o protótipo é aberto.
+
+    Numa URL pública isso significa deixar qualquer pessoa gastar sua cota
+    da OpenAI — defina WEB_ACCESS_CODE antes de compartilhar o link.
+    """
+    expected = settings.web_access_code
+    if not expected:
+        return True
+    provided = headers.get("x-access-code", "")
+    return bool(provided) and hmac.compare_digest(expected, provided)
+
+
+@app.post("/api/chat")
+async def chat_api(request: Request) -> Response:
+    if not settings.enable_web:
+        return JSONResponse({"error": "web desabilitado"}, status_code=404)
+
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    if not _web_access_allowed(headers):
+        return JSONResponse({"error": "codigo_invalido"}, status_code=401)
+
+    if not settings.ready:
+        return JSONResponse(
+            {"error": "nao_configurado", "missing_env": settings.missing()},
+            status_code=503,
+        )
+
+    try:
+        payload = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return JSONResponse({"error": "json_invalido"}, status_code=400)
+
+    mensagens = web_channel.parse_webhook(payload)
+    if not mensagens:
+        return JSONResponse({"error": "sessao_ou_texto_ausente"}, status_code=400)
+
+    mensagem = mensagens[0]
+    try:
+        outcome = web_pipeline.handle(mensagem)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("falha no protótipo web: %s", exc)
+        web_channel.discard(mensagem.sender)
+        return JSONResponse({"error": "falha_interna"}, status_code=500)
+
+    # Diferente do WhatsApp, aqui devolvemos na mesma requisição.
+    return JSONResponse(
+        {"replies": web_channel.drain(mensagem.sender), "outcome": outcome}
+    )
+
+
+# ----------------------------------------------------------------------
+# WhatsApp
+# ----------------------------------------------------------------------
 
 @app.get("/webhook", response_class=PlainTextResponse)
 def verify_webhook(

@@ -7,8 +7,11 @@ com triagem clínica antes do modelo e recusa explícita fora do escopo.
 > **Não faz diagnóstico, não prescreve e não substitui avaliação profissional.**
 > Sinais de emergência interrompem o fluxo e encaminham para o 192.
 
-📄 **[docs/OPERACAO.md](docs/OPERACAO.md)** — como conseguir um número sem chip,
-quanto custa operar e o roadmap. Leia antes de colocar no ar.
+📋 **[docs/GO_LIVE.md](docs/GO_LIVE.md)** — checklist para colocar no ar, das duas
+trilhas paralelas (burocracia da Meta × técnica) até o piloto.
+
+📄 **[docs/OPERACAO.md](docs/OPERACAO.md)** — número sem chip, custos, verificação de
+CNPJ, política de IA da Meta e escolha de modelo.
 
 ---
 

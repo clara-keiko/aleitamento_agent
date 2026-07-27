@@ -509,6 +509,9 @@ Em ordem de impacto:
 
 ## 7. Roadmap sugerido
 
+> Para a sequência operacional passo a passo — o que fazer hoje, o que esperar e em que
+> ordem — veja **[GO_LIVE.md](GO_LIVE.md)**.
+
 ### P0 — antes de qualquer mãe real usar
 
 - [ ] Resolver o CNPJ e concluir a verificação de negócio da Meta (§2.7) — ou decidir

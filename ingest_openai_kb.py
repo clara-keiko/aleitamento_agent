@@ -33,8 +33,19 @@ load_dotenv()
 DOCS_DIR = Path(__file__).parent / "docs"
 STORE_NAME = "puericultura_amamentacao"
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
-# Arquivos que documentam o projeto, não conteúdo clínico para a base.
-EXCLUDED_NAMES = {"OPERACAO.md"}
+
+
+def e_documentacao_do_projeto(caminho: Path) -> bool:
+    """True para docs do projeto, que não podem entrar na base clínica.
+
+    A convenção é o nome em CAIXA ALTA (OPERACAO.md, GO_LIVE.md). O material
+    clínico usa nome normal (AppAM_*.docx, vacinas_*.md). Uma lista fixa de
+    nomes já falhou uma vez: bastou criar um doc novo para ele ser indexado
+    como se fosse conteúdo de saúde e passar a competir na recuperação.
+    """
+    if caminho.suffix.lower() != ".md":
+        return False
+    return caminho.stem.upper() == caminho.stem
 
 
 def listar_arquivos() -> list[Path]:
@@ -46,7 +57,7 @@ def listar_arquivos() -> list[Path]:
         for caminho in DOCS_DIR.rglob("*")
         if caminho.is_file()
         and caminho.suffix.lower() in ALLOWED_EXTENSIONS
-        and caminho.name not in EXCLUDED_NAMES
+        and not e_documentacao_do_projeto(caminho)
         and not caminho.name.startswith(".")
     ]
 

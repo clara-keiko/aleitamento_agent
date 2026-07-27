@@ -10,10 +10,25 @@ veredito GO / NO-GO.
 Gasta poucos centavos: faz três consultas reais ao modelo.
 """
 
-import os
 import sys
-import time
-from pathlib import Path
+
+# Antes de qualquer outro import: o projeto usa sintaxe de tipo do 3.10+
+# (`str | None`), que no 3.9 quebra com "unsupported operand type(s) for |" —
+# erro que não diz nada sobre a causa. O macOS ainda vem com 3.9 de fábrica.
+# noqa abaixo: o ruff assume 3.11 e acha o bloco morto — ele existe exatamente
+# para quem NÃO está no 3.11.
+if sys.version_info < (3, 11):  # noqa: UP036
+    versao = ".".join(str(n) for n in sys.version_info[:3])
+    sys.exit(
+        f"\nERRO: este projeto precisa de Python 3.11 ou maior. Você está no {versao}.\n"
+        f"Interpretador: {sys.executable}\n\n"
+        "No macOS, o 'python3' de fábrica é o 3.9. Instale o 3.11 e use um ambiente\n"
+        "virtual — o passo a passo está no README, seção 'Protótipo no navegador'.\n"
+    )
+
+import os  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

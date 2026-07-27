@@ -47,13 +47,25 @@ O agente roda em `/chat` **sem precisar de WhatsApp** — sem app na Meta, sem n
 sem verificação. Mesmo pipeline, mesma triagem, mesma base: o que for validado aqui é
 o que a mãe recebe lá.
 
+**Requer Python 3.11 ou maior.** ⚠️ O macOS vem de fábrica com o 3.9, que **não roda
+este projeto** — confira com `python3 --version` antes de começar. Se for 3.9 ou 3.10,
+instale o 3.11 (`brew install python@3.11` ou o instalador de python.org) e use o
+ambiente virtual abaixo.
+
 ```bash
+python3.11 -m venv .venv     # use 3.11 explicitamente
+source .venv/bin/activate    # o prompt passa a mostrar (.venv)
+
 pip install -r requirements-dev.txt
-cp .env.example .env         # OPENAI_API_KEY e VECTOR_STORE_ID bastam
+cp .env.example .env         # preencha OPENAI_API_KEY
 python ingest_openai_kb.py   # indexa docs/ e imprime o VECTOR_STORE_ID
 uvicorn main:app --reload
 # http://localhost:8000/chat
 ```
+
+Dentro do ambiente virtual, `python` e `pip` já apontam para o 3.11 — não precisa
+escrever `python3.11` nem `pip3`. A cada novo terminal, rode `source .venv/bin/activate`
+de novo.
 
 O botão **inspeção** mostra qual camada respondeu cada mensagem — é o que distingue
 "a resposta está errada" de "a triagem interceptou".

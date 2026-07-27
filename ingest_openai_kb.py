@@ -20,13 +20,24 @@ Agora:
         Mostra o que faria, sem gastar nada.
 """
 
-import argparse
-import os
 import sys
-from pathlib import Path
 
-from dotenv import load_dotenv
-from openai import OpenAI, OpenAIError
+# Ver a mesma nota em scripts/preflight.py: no 3.9 o erro seria críptico.
+if sys.version_info < (3, 11):  # noqa: UP036
+    versao = ".".join(str(n) for n in sys.version_info[:3])
+    sys.exit(
+        f"\nERRO: este projeto precisa de Python 3.11 ou maior. Você está no {versao}.\n"
+        f"Interpretador: {sys.executable}\n\n"
+        "No macOS, o 'python3' de fábrica é o 3.9. Instale o 3.11 e use um ambiente\n"
+        "virtual — o passo a passo está no README, seção 'Protótipo no navegador'.\n"
+    )
+
+import argparse  # noqa: E402
+import os  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from dotenv import load_dotenv  # noqa: E402
+from openai import OpenAI, OpenAIError  # noqa: E402
 
 load_dotenv()
 

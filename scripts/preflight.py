@@ -83,7 +83,25 @@ def checar_config(r: Resultado) -> Settings | None:
             print(f"  {FALHA} {nome} AUSENTE")
             r.bloqueio(f"{nome} não está definida")
 
+    from app.llm import AssistantEngine, is_reasoning_model
+
     print(f"  {OK} modelo: {settings.openai_model}")
+
+    if is_reasoning_model(settings.openai_model):
+        teto = AssistantEngine(settings).teto_de_saida
+        print(f"  {OK} modelo de raciocínio · esforço {settings.reasoning_effort} "
+              f"· teto de saída {teto} tokens")
+        # O erro clássico: teto de modelo comum num modelo que raciocina. Ele
+        # gasta a cota pensando e devolve vazio, e o log só diz "resposta vazia".
+        if teto < 1500:
+            print(f"  {FALHA} teto baixo demais para modelo de raciocínio")
+            r.bloqueio(
+                f"MAX_OUTPUT_TOKENS={teto} inclui os tokens de raciocínio; "
+                "use 0 (automático) ou pelo menos 2000"
+            )
+        if settings.reasoning_effort not in {"low", "medium", "high", "minimal"}:
+            r.aviso(f"REASONING_EFFORT='{settings.reasoning_effort}' não é um valor usual")
+
     print(f"  {OK} protótipo web: {'ligado' if settings.enable_web else 'DESLIGADO'}")
     if not settings.enable_web:
         r.bloqueio("ENABLE_WEB está desligado — /chat não vai abrir")

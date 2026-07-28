@@ -51,6 +51,21 @@ Forma:
 AUDIO_BYTES_PER_SECOND = 16_000
 OPENAI_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024
 
+# Famílias que raciocinam antes de responder.
+REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+# Teto de saída. Nos modelos de raciocínio o `max_output_tokens` cobre também
+# os tokens de raciocínio, que não aparecem para o usuário — com o teto de um
+# modelo comum, o modelo gasta a cota inteira pensando e devolve resposta
+# vazia. O teto maior aqui é sobre o total; a resposta visível continua curta
+# porque o prompt pede no máximo seis linhas.
+MAX_OUTPUT_PADRAO = 600
+MAX_OUTPUT_RACIOCINIO = 3000
+
+
+def is_reasoning_model(modelo: str) -> bool:
+    return (modelo or "").lower().startswith(REASONING_PREFIXES)
+
 
 @dataclass
 class Answer:
@@ -87,26 +102,45 @@ class AssistantEngine:
     # ------------------------------------------------------------------
     # Texto
     # ------------------------------------------------------------------
+    @property
+    def raciocina(self) -> bool:
+        return is_reasoning_model(self.settings.openai_model)
+
+    @property
+    def teto_de_saida(self) -> int:
+        """Teto de tokens de saída, incluindo raciocínio quando houver."""
+        if self.settings.max_output_tokens > 0:
+            return self.settings.max_output_tokens
+        return MAX_OUTPUT_RACIOCINIO if self.raciocina else MAX_OUTPUT_PADRAO
+
     def answer(self, user_text: str, history: list[dict] | None = None) -> Answer:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
 
+        parametros = {
+            "model": self.settings.openai_model,
+            "input": messages,
+            "tools": [
+                {
+                    "type": "file_search",
+                    "vector_store_ids": [self.settings.vector_store_id],
+                    # Os trechos recuperados dominam o custo de entrada.
+                    # Limitar aqui é a alavanca mais direta sobre a conta.
+                    "max_num_results": self.settings.max_retrieval_results,
+                }
+            ],
+            "max_output_tokens": self.teto_de_saida,
+        }
+
+        if self.raciocina:
+            # Esforço baixo de propósito: a tarefa é resumir trecho recuperado,
+            # não resolver problema difícil. Raciocínio longo aqui só adiciona
+            # latência e custo — e no WhatsApp a espera é percebida.
+            parametros["reasoning"] = {"effort": self.settings.reasoning_effort}
+
         try:
-            response = self.client.responses.create(
-                model=self.settings.openai_model,
-                input=messages,
-                tools=[
-                    {
-                        "type": "file_search",
-                        "vector_store_ids": [self.settings.vector_store_id],
-                        # Os trechos recuperados dominam o custo de entrada.
-                        # Limitar aqui é a alavanca mais direta sobre a conta.
-                        "max_num_results": self.settings.max_retrieval_results,
-                    }
-                ],
-                max_output_tokens=self.settings.max_output_tokens,
-            )
+            response = self.client.responses.create(**parametros)
         except OpenAIError as exc:
             log.error("erro na chamada à OpenAI: %s", exc)
             return Answer(text="", grounded=False, error=True)
@@ -117,7 +151,22 @@ class AssistantEngine:
         text = (getattr(response, "output_text", "") or "").strip()
         entrada, saida = token_usage(response)
 
+        motivo = truncation_reason(response)
+        if motivo == "max_output_tokens":
+            # Sintoma clássico de modelo de raciocínio com teto apertado: ele
+            # consome a cota pensando e sobra pouco ou nada visível. Sem esta
+            # mensagem, o log só mostraria "resposta vazia".
+            log.error(
+                "resposta truncada no teto de %d tokens (modelo=%s, raciocínio=%s). "
+                "Aumente MAX_OUTPUT_TOKENS ou reduza REASONING_EFFORT.",
+                self.teto_de_saida,
+                self.settings.openai_model,
+                self.raciocina,
+            )
+
         if not text:
+            if motivo is None:
+                log.error("modelo devolveu resposta vazia sem motivo declarado")
             return Answer(
                 text="", grounded=False, error=True,
                 input_tokens=entrada, output_tokens=saida,
@@ -196,6 +245,25 @@ def count_file_citations(response) -> int:
 def has_file_citations(response) -> bool:
     """True se a resposta cita ao menos um trecho da base vetorial."""
     return count_file_citations(response) > 0
+
+
+def truncation_reason(response) -> str | None:
+    """Motivo pelo qual a resposta veio incompleta, se veio.
+
+    A Responses API marca `status="incomplete"` e detalha o motivo. O caso que
+    importa aqui é `max_output_tokens`, comum em modelo de raciocínio.
+    """
+    if getattr(response, "status", None) != "incomplete":
+        return None
+
+    detalhes = getattr(response, "incomplete_details", None)
+    if detalhes is None:
+        return "desconhecido"
+
+    motivo = getattr(detalhes, "reason", None)
+    if motivo is None and isinstance(detalhes, dict):
+        motivo = detalhes.get("reason")
+    return motivo or "desconhecido"
 
 
 def token_usage(response) -> tuple[int, int]:

@@ -60,7 +60,11 @@ class Settings:
     # OpenAI
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     vector_store_id: str = field(default_factory=lambda: _env("VECTOR_STORE_ID"))
-    openai_model: str = field(default_factory=lambda: _env("OPENAI_MODEL", "gpt-4o-mini"))
+    openai_model: str = field(default_factory=lambda: _env("OPENAI_MODEL", "gpt-5-mini"))
+    # Só se aplica a modelo de raciocínio. "low" porque a tarefa é resumir
+    # trecho recuperado, não resolver problema difícil: esforço alto aqui
+    # só adiciona latência e tokens.
+    reasoning_effort: str = field(default_factory=lambda: _env("REASONING_EFFORT", "low"))
     transcribe_model: str = field(
         default_factory=lambda: _env("TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
     )
@@ -73,7 +77,9 @@ class Settings:
     max_retrieval_results: int = field(
         default_factory=lambda: _env_int("MAX_RETRIEVAL_RESULTS", 8)
     )
-    max_output_tokens: int = field(default_factory=lambda: _env_int("MAX_OUTPUT_TOKENS", 500))
+    # 0 = decidir pelo modelo. Modelo de raciocínio precisa de teto bem maior,
+    # porque os tokens de raciocínio entram nessa mesma conta.
+    max_output_tokens: int = field(default_factory=lambda: _env_int("MAX_OUTPUT_TOKENS", 0))
 
     # Protótipo web. Serve a mesma lógica do WhatsApp no navegador, para
     # validar conteúdo antes de existir número.

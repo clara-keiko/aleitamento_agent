@@ -622,7 +622,11 @@ def escrever_relatorio_cego(reports: list[Report], caminho: Path, semente: int =
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", help="chama o modelo de verdade")
-    parser.add_argument("--model", default="gpt-4o-mini", help="modelo a avaliar")
+    parser.add_argument(
+        "--model",
+        default=Settings().openai_model,
+        help="modelo a avaliar (padrão: o mesmo do .env)",
+    )
     parser.add_argument(
         "--comparar", default="", help="lista de modelos separados por vírgula"
     )

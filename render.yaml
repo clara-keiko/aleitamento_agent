@@ -26,7 +26,14 @@ services:
       - key: PSEUDONYM_KEY
         generateValue: true
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gpt-5-mini
+      # gpt-5-mini raciocina antes de responder; esforço baixo mantém a
+      # latência aceitável no WhatsApp.
+      - key: REASONING_EFFORT
+        value: low
+      # 0 = o código escolhe o teto conforme o modelo. Ver .env.example.
+      - key: MAX_OUTPUT_TOKENS
+        value: "0"
       - key: OPENAI_TIMEOUT_SECONDS
         value: "45"
       - key: MAX_RETRIEVAL_RESULTS

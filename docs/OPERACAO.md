@@ -465,9 +465,27 @@ Trocar de fornecedor troca a parte que menos importa e reconstrói a que mais im
 
 1. **Fique na OpenAI por enquanto.** A integração com `file_search` vale mais que a
    diferença entre modelos pequenos de 2026.
-2. **Saia do `gpt-4o-mini`.** É um modelo de 2024. Teste o `gpt-5-mini`: o custo dobra
-   para US$ 24/mês a mil mães, o que é irrelevante, e a diferença em seguir instrução
-   ("não prescreva", "não invente") tende a ser real.
+2. **✅ Feito: o padrão passou a ser `gpt-5-mini`.** O `gpt-4o-mini` é de 2024. O custo
+   sobe para ~US$ 24/mês a mil mães, irrelevante nesta escala. Reverter é uma variável:
+   `OPENAI_MODEL=gpt-4o-mini`.
+
+   ⚠️ **Isso não foi só trocar a string.** O `gpt-5-mini` **raciocina antes de
+   responder**, e nessa família o `max_output_tokens` inclui os tokens de raciocínio,
+   que a mãe nunca vê. Com o teto anterior de 500, o modelo gastaria a cota pensando e
+   devolveria resposta vazia — que o código trata como erro, então **toda mãe receberia
+   a mensagem de fallback**. O que mudou junto:
+
+   | Ajuste | Por quê |
+   |---|---|
+   | Teto de saída automático por modelo (600 → 3000) | Cabe raciocínio + resposta |
+   | `REASONING_EFFORT=low` | A tarefa é resumir trecho recuperado, não resolver problema difícil; esforço alto só adiciona latência |
+   | Detecção de resposta truncada | Antes o log dizia só "resposta vazia", sem apontar a causa |
+   | Bloqueio no pré-voo | `MAX_OUTPUT_TOKENS` apertado com modelo de raciocínio agora dá NO-GO |
+
+   Também espere **latência maior** e **mais tokens de saída** — o raciocínio é cobrado
+   como saída. O eval mede o consumo real, então a comparação de custo já captura isso;
+   as projeções da §6.2, que assumiam 250 tokens de saída, ficam otimistas para esta
+   família.
 3. **Decida com o eval, não com opinião.** Um comando roda os dois modelos no mesmo
    conjunto e imprime a tabela lado a lado:
 

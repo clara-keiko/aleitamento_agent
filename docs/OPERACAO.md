@@ -468,18 +468,42 @@ Trocar de fornecedor troca a parte que menos importa e reconstrói a que mais im
 2. **Saia do `gpt-4o-mini`.** É um modelo de 2024. Teste o `gpt-5-mini`: o custo dobra
    para US$ 24/mês a mil mães, o que é irrelevante, e a diferença em seguir instrução
    ("não prescreva", "não invente") tende a ser real.
-3. **Decida com o eval, não com opinião.** É para isso que ele existe:
+3. **Decida com o eval, não com opinião.** Um comando roda os dois modelos no mesmo
+   conjunto e imprime a tabela lado a lado:
 
    ```bash
-   python evals/run_eval.py --live --model gpt-4o-mini
-   python evals/run_eval.py --live --model gpt-5-mini
+   python evals/run_eval.py --comparar gpt-4o-mini,gpt-5-mini \
+       --relatorio comparacao.md
    ```
 
-   Compare taxa de fundamentação, recusa fora de escopo, vazamento de dose em `med-03`,
-   latência p95 e custo. Aí a escolha vira dado.
-4. **Meça a recuperação antes de culpar o modelo.** Se a taxa de "fora de escopo" estiver
-   alta em perguntas que *estão* no material, o problema é a recuperação — e trocar de
-   modelo não resolve.
+   ```
+     acerto geral                 37/47 (79%)      42/47 (89%)
+     emergência                           8/8              8/8
+     fundamentação                        76%              96%
+     latência p95                     3.100 ms         4.200 ms
+     tokens entrada (média)              6.200            6.100
+     custo/pergunta                US$ 0.00107      US$ 0.00204
+     custo/mês (12.000)              US$ 12.89        US$ 24.54
+
+     Melhor qualidade: gpt-5-mini (89%)
+     Contra gpt-4o-mini: +11 pontos de acerto por US$ +11.65/mês
+   ```
+
+   O custo usa o **consumo real de tokens** informado pela API, não estimativa. Isso
+   importa: o `file_search` injeta os trechos recuperados na entrada, e é essa parcela
+   que domina a conta — chutá-la erra o número que mais pesa.
+
+   Ajuste o volume com `--interacoes-mes 150000` para projetar outra escala. Os preços
+   ficam em `evals/precos.yaml`, editável sem mexer em código.
+
+4. **Leia o relatório com quem entende.** O `--relatorio` grava um markdown com as
+   respostas dos dois modelos **lado a lado**, pergunta por pergunta. Taxa de acerto
+   mede consistência; se a resposta está clinicamente melhor, só uma consultora de
+   amamentação decide — e é para isso que esse arquivo existe.
+5. **Meça a recuperação antes de culpar o modelo.** A linha **fundamentação** na tabela
+   é o diagnóstico: se ela estiver baixa nos *dois* modelos, o problema é a recuperação,
+   não o modelo — e trocar de LLM não resolve. Nesse caso, mexa em
+   `MAX_RETRIEVAL_RESULTS` e na curadoria da base antes de gastar mais por token.
 
 ### 6.5 Quando trocar de fornecedor faria sentido
 

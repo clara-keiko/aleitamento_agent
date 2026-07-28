@@ -57,6 +57,14 @@ class Answer:
     text: str
     grounded: bool
     error: bool = False
+    # Consumo real informado pela API. Sem isto, comparar modelos depende de
+    # estimar quantos tokens o file_search injeta — e essa estimativa erra
+    # justamente na parcela que domina o custo.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # Quantos trechos da base foram efetivamente citados. Serve para separar
+    # "respondeu com o material" de "respondeu com um trecho solto".
+    citations: int = 0
 
 
 class AssistantEngine:
@@ -107,10 +115,22 @@ class AssistantEngine:
             return Answer(text="", grounded=False, error=True)
 
         text = (getattr(response, "output_text", "") or "").strip()
-        if not text:
-            return Answer(text="", grounded=False, error=True)
+        entrada, saida = token_usage(response)
 
-        return Answer(text=text, grounded=has_file_citations(response))
+        if not text:
+            return Answer(
+                text="", grounded=False, error=True,
+                input_tokens=entrada, output_tokens=saida,
+            )
+
+        citacoes = count_file_citations(response)
+        return Answer(
+            text=text,
+            grounded=citacoes > 0,
+            input_tokens=entrada,
+            output_tokens=saida,
+            citations=citacoes,
+        )
 
     # ------------------------------------------------------------------
     # Áudio
@@ -159,8 +179,9 @@ def _extension_for(mime: str) -> str:
     return mapping.get((mime or "").split(";")[0].strip(), "ogg")
 
 
-def has_file_citations(response) -> bool:
-    """True se a resposta cita ao menos um trecho da base vetorial."""
+def count_file_citations(response) -> int:
+    """Quantos trechos da base vetorial a resposta cita."""
+    total = 0
     for item in getattr(response, "output", None) or []:
         for content in getattr(item, "content", None) or []:
             for annotation in getattr(content, "annotations", None) or []:
@@ -168,8 +189,35 @@ def has_file_citations(response) -> bool:
                 if kind is None and isinstance(annotation, dict):
                     kind = annotation.get("type")
                 if kind == "file_citation":
-                    return True
-    return False
+                    total += 1
+    return total
+
+
+def has_file_citations(response) -> bool:
+    """True se a resposta cita ao menos um trecho da base vetorial."""
+    return count_file_citations(response) > 0
+
+
+def token_usage(response) -> tuple[int, int]:
+    """(tokens de entrada, tokens de saída) informados pela API.
+
+    Devolve (0, 0) quando o campo não vem — o eval trata isso como
+    'não medido' em vez de fingir que a chamada foi de graça.
+    """
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0, 0
+
+    def campo(*nomes: str) -> int:
+        for nome in nomes:
+            valor = getattr(usage, nome, None)
+            if valor is None and isinstance(usage, dict):
+                valor = usage.get(nome)
+            if isinstance(valor, int):
+                return valor
+        return 0
+
+    return campo("input_tokens", "prompt_tokens"), campo("output_tokens", "completion_tokens")
 
 
 def fallback_message() -> str:

@@ -99,15 +99,18 @@ O eval é a peça que responde *"o agente ainda está seguro?"* e *"trocar de mo
 melhora?"*. Ele roda no CI e **falha o build se um caso de emergência deixar de ser
 reconhecido**.
 
-Para comparar modelos de verdade (chama a API, custa alguns centavos):
+Para comparar modelos (chama a API, custa alguns centavos):
 
 ```bash
-python evals/run_eval.py --live --model gpt-4o-mini
-python evals/run_eval.py --live --model gpt-5-mini
+python evals/run_eval.py --comparar gpt-4o-mini,gpt-5-mini --relatorio comparacao.md
 ```
 
-Ele imprime taxa de acerto por categoria, latência p50/p95 e custo estimado por mês.
-Ver [docs/OPERACAO.md §6](docs/OPERACAO.md) para a análise da escolha de modelo.
+Imprime tabela lado a lado com acerto por categoria, taxa de fundamentação, latência
+p50/p95 e custo — calculado com o **consumo real de tokens**, não estimativa. O
+`--relatorio` grava as respostas dos modelos lado a lado para revisão humana.
+
+Preços em [`evals/precos.yaml`](evals/precos.yaml), editável sem mexer em código.
+Análise em [docs/OPERACAO.md §6](docs/OPERACAO.md).
 
 ⚠️ O conjunto dourado (`evals/golden_set.yaml`) foi escrito para ser editado por quem
 entende de amamentação. **Antes do piloto, uma consultora precisa revisar cada caso** —

@@ -496,10 +496,43 @@ Trocar de fornecedor troca a parte que menos importa e reconstrói a que mais im
    Ajuste o volume com `--interacoes-mes 150000` para projetar outra escala. Os preços
    ficam em `evals/precos.yaml`, editável sem mexer em código.
 
-4. **Leia o relatório com quem entende.** O `--relatorio` grava um markdown com as
-   respostas dos dois modelos **lado a lado**, pergunta por pergunta. Taxa de acerto
-   mede consistência; se a resposta está clinicamente melhor, só uma consultora de
-   amamentação decide — e é para isso que esse arquivo existe.
+4. **Quando a fundamentação satura, número para de decidir.** Medimos 98% com o
+   `gpt-4o-mini`: a recuperação está boa e essa métrica não separa mais os modelos —
+   um modelo mais forte vai marcar 98–100% também. A partir daí só duas coisas
+   discriminam.
+
+   **A primeira é automática:** a linha `segurança (sem dose)` na tabela isola os casos
+   em que a mãe pede posologia. Respeitar "não indique dose" é obediência a instrução,
+   não recuperação — é exatamente onde um modelo mais forte costuma se pagar.
+
+   **A segunda é humana, e cega:**
+
+   ```bash
+   python evals/run_eval.py --comparar gpt-4o-mini,gpt-5-mini \
+       --relatorio-cego revisao.md
+   ```
+
+   Gera um markdown com as respostas como *Resposta A* e *Resposta B*, sem dizer qual
+   é qual, e com a ordem **balanceada**: exatamente metade das perguntas mostra cada
+   modelo primeiro. As duas coisas são deliberadas — saber que um é "o mais novo e mais
+   caro" contamina o julgamento, e sorteio puro desequilibra (numa amostra de 25 casos
+   é comum um modelo cair na posição A em 17 deles, e aí a posição vira pista).
+
+   A consultora marca a melhor resposta em cada par. Depois:
+
+   ```bash
+   python evals/apurar.py revisao.md
+   ```
+
+   ```
+     gpt-5-mini          21 ( 84%)  ████████████████████████████
+     gpt-4o-mini          4 ( 16%)  █████
+
+     gpt-5-mini preferido de forma consistente (21 × 4).
+   ```
+
+   A apuração se recusa a concluir com poucos casos decisivos, e chama de empate técnico
+   diferença dentro do ruído — melhor não decidir do que decidir por duas respostas.
 5. **Meça a recuperação antes de culpar o modelo.** A linha **fundamentação** na tabela
    é o diagnóstico: se ela estiver baixa nos *dois* modelos, o problema é a recuperação,
    não o modelo — e trocar de LLM não resolve. Nesse caso, mexa em

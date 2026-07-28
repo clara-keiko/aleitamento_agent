@@ -118,6 +118,82 @@ class TestConjuntoDourado:
             assert obtido == caso["outcome"], f"{caso['id']}: {caso['pergunta']}"
 
 
+class TestRelatorioCego:
+    """O relatório cego existe para controlar viés. Se ele mesmo enviesar,
+    é pior que não ter — dá falsa confiança ao resultado."""
+
+    def _reports(self, n_casos: int):
+        from run_eval import escrever_relatorio_cego  # noqa: F401
+
+        reports = []
+        for indice, modelo in enumerate(["modelo-a", "modelo-b"]):
+            resultados = [
+                resultado(
+                    case_id=f"c{i:02d}",
+                    pergunta=f"pergunta {i}",
+                    # Texto neutro de propósito: o nome do modelo não pode
+                    # entrar pela resposta, senão o teste de anonimato mede
+                    # o próprio dado de teste em vez do relatório.
+                    resposta=f"conteúdo {indice} para o caso {i}",
+                    tokens_entrada=100,
+                )
+                for i in range(n_casos)
+            ]
+            reports.append(Report(modelo=modelo, resultados=resultados))
+        return reports
+
+    def test_posicao_A_fica_equilibrada(self, tmp_path):
+        import json
+
+        from run_eval import escrever_relatorio_cego
+
+        destino = tmp_path / "revisao.md"
+        escrever_relatorio_cego(self._reports(30), destino)
+
+        chave = json.loads((tmp_path / "revisao.chave.json").read_text(encoding="utf-8"))
+        como_a = [v["A"] for v in chave.values()]
+        assert como_a.count("modelo-a") == 15
+        assert como_a.count("modelo-b") == 15
+
+    def test_numero_impar_de_casos_fica_quase_equilibrado(self, tmp_path):
+        import json
+
+        from run_eval import escrever_relatorio_cego
+
+        destino = tmp_path / "revisao.md"
+        escrever_relatorio_cego(self._reports(7), destino)
+
+        chave = json.loads((tmp_path / "revisao.chave.json").read_text(encoding="utf-8"))
+        como_a = [v["A"] for v in chave.values()]
+        assert abs(como_a.count("modelo-a") - como_a.count("modelo-b")) <= 1
+
+    def test_markdown_nao_revela_o_modelo(self, tmp_path):
+        from run_eval import escrever_relatorio_cego
+
+        destino = tmp_path / "revisao.md"
+        escrever_relatorio_cego(self._reports(6), destino)
+
+        texto = destino.read_text(encoding="utf-8")
+        assert "modelo-a" not in texto
+        assert "modelo-b" not in texto
+        assert "Resposta A:" in texto
+        assert "- [ ] A melhor" in texto
+
+    def test_e_reproduzivel(self, tmp_path):
+        import json
+
+        from run_eval import escrever_relatorio_cego
+
+        chaves = []
+        for nome in ["um", "dois"]:
+            destino = tmp_path / f"{nome}.md"
+            escrever_relatorio_cego(self._reports(10), destino)
+            chaves.append(
+                json.loads((tmp_path / f"{nome}.chave.json").read_text(encoding="utf-8"))
+            )
+        assert chaves[0] == chaves[1]
+
+
 class TestPrecos:
     def test_carrega_e_tem_o_modelo_atual(self):
         precos = carregar_precos()

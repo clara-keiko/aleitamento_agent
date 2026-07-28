@@ -109,6 +109,16 @@ Imprime tabela lado a lado com acerto por categoria, taxa de fundamentação, la
 p50/p95 e custo — calculado com o **consumo real de tokens**, não estimativa. O
 `--relatorio` grava as respostas dos modelos lado a lado para revisão humana.
 
+Quando a taxa de fundamentação satura (≥95%), número para de separar os modelos. Aí
+entra a revisão cega — respostas anonimizadas, ordem balanceada, julgadas por quem
+entende de amamentação:
+
+```bash
+python evals/run_eval.py --comparar gpt-4o-mini,gpt-5-mini --relatorio-cego revisao.md
+# a consultora preenche revisao.md
+python evals/apurar.py revisao.md
+```
+
 Preços em [`evals/precos.yaml`](evals/precos.yaml), editável sem mexer em código.
 Análise em [docs/OPERACAO.md §6](docs/OPERACAO.md).
 

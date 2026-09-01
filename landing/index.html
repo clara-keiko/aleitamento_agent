@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LactAI — apoio em amamentação e cuidados com o bebê</title>
+<meta name="description" content="Tire dúvidas de amamentação, sono, vacinas e cuidados com o bebê a qualquer hora, no WhatsApp. Respostas baseadas em material técnico do Ministério da Saúde.">
+<style>
+/* ------------------------------------------------------------------
+   Tokens. Paleta tirada do momento real do produto: a mamada de
+   madrugada. Ameixa-noite como chão, âmbar de abajur como único acento,
+   neutros puxados para o quente — nada de cinza puro.
+   ------------------------------------------------------------------ */
+:root {
+  --noite:      #241B2F;
+  --noite-alta: #33263F;
+  --leite:      #FAF6F3;
+  --leite-alta: #FFFFFF;
+  --ambar:      #E9A13B;
+  --ambar-forte:#C9832A;
+  --sombra:     #6B5F73;
+  --alerta:     #B34A36;
+  --linha:      rgba(36, 27, 47, .12);
+
+  --chao:       var(--leite);
+  --chao-alta:  var(--leite-alta);
+  --tinta:      var(--noite);
+  --tinta-fraca:var(--sombra);
+  --borda:      var(--linha);
+
+  /* Herói e planos são blocos escuros que interrompem o fundo claro. No tema
+     escuro isso não pode virar cor sobre cor igual — o bloco passa a ser mais
+     CLARO que a página para a hierarquia sobreviver à inversão. */
+  --bloco:      var(--noite);
+  --bloco-alta: var(--noite-alta);
+  --bloco-linha:rgba(250, 246, 243, .12);
+
+  --serif: ui-serif, "Iowan Old Style", Georgia, "Palatino Linotype", serif;
+  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --medida: 34rem;
+  --raio: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --chao:        #17111F;
+    --chao-alta:   #1F1729;
+    --tinta:       #F2ECEF;
+    --tinta-fraca: #A899AF;
+    --borda:       rgba(242, 236, 239, .12);
+    --ambar:       #F0B457;
+    --bloco:       #2C2139;
+    --bloco-alta:  #3B2D4A;
+    --bloco-linha: rgba(242, 236, 239, .1);
+  }
+}
+:root[data-theme="dark"] {
+  --chao: #17111F; --chao-alta: #1F1729; --tinta: #F2ECEF;
+  --tinta-fraca: #A899AF; --borda: rgba(242,236,239,.12); --ambar: #F0B457;
+  --bloco: #2C2139; --bloco-alta: #3B2D4A; --bloco-linha: rgba(242,236,239,.1);
+}
+:root[data-theme="light"] {
+  --chao: var(--leite); --chao-alta: var(--leite-alta); --tinta: var(--noite);
+  --tinta-fraca: var(--sombra); --borda: var(--linha); --ambar: #E9A13B;
+  --bloco: var(--noite); --bloco-alta: var(--noite-alta);
+  --bloco-linha: rgba(250,246,243,.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--chao);
+  color: var(--tinta);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { text-wrap: balance; letter-spacing: -.022em; line-height: 1.1; margin: 0; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ambar); outline-offset: 3px; border-radius: 4px; }
+
+.env { width: min(100% - 2.5rem, 68rem); margin-inline: auto; }
+.pilha { display: flex; flex-direction: column; }
+
+.rotulo {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .13em;
+  font-weight: 600; color: var(--ambar);
+}
+
+/* ---------- aviso de rascunho: apague este bloco ao publicar ---------- */
+.rascunho {
+  background: var(--alerta); color: #fff; font-size: .8rem;
+  text-align: center; padding: .5rem 1rem; letter-spacing: .01em;
+}
+/* --------------------------------------------------------------------- */
+
+/* ---------------------------- topo ---------------------------- */
+.topo {
+  background: var(--bloco); color: var(--leite);
+  padding-block: 1.25rem 5.5rem;
+}
+.barra { display: flex; align-items: center; gap: 1rem; }
+.marca { font-weight: 650; font-size: 1.05rem; letter-spacing: -.01em; }
+.marca span { color: var(--ambar); }
+.barra nav { margin-left: auto; display: flex; gap: 1.5rem; font-size: .92rem; }
+.barra nav a { color: rgba(250,246,243,.72); text-decoration: none; }
+.barra nav a:hover { color: var(--leite); }
+@media (max-width: 44rem) { .barra nav { display: none; } }
+
+.heroi { display: grid; grid-template-columns: 1.05fr .95fr; gap: 4rem; align-items: center;
+         margin-top: 4.5rem; }
+@media (max-width: 56rem) { .heroi { grid-template-columns: 1fr; gap: 3rem; margin-top: 3rem; } }
+
+.heroi h1 { font-size: clamp(2.4rem, 5.4vw, 3.6rem); font-weight: 660; }
+.heroi h1 em {
+  font-family: var(--serif); font-style: italic; font-weight: 400;
+  color: var(--ambar); letter-spacing: -.01em;
+}
+.heroi .sub { color: rgba(250,246,243,.76); font-size: 1.1rem; max-width: 30rem; margin-top: 1.25rem; }
+
+.acoes { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.botao {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .8rem 1.4rem; border-radius: 999px; text-decoration: none;
+  font-weight: 600; font-size: .96rem; border: 1px solid transparent;
+  transition: transform .15s ease, background-color .15s ease;
+}
+.botao:hover { transform: translateY(-1px); }
+.botao.cheio { background: var(--ambar); color: #2A1E08; }
+.botao.cheio:hover { background: #F2AE4C; }
+.botao.vazio { border-color: rgba(250,246,243,.3); color: var(--leite); }
+.botao.vazio:hover { border-color: rgba(250,246,243,.6); }
+
+.selo { margin-top: 1.5rem; font-size: .84rem; color: rgba(250,246,243,.55); }
+
+/* --------------------- conversa do herói --------------------- */
+.fone {
+  background: var(--bloco-alta); border: 1px solid rgba(250,246,243,.1);
+  border-radius: 22px; padding: 1.1rem; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+.fone .hora {
+  text-align: center; font-size: .72rem; color: rgba(250,246,243,.4);
+  padding-bottom: .9rem; letter-spacing: .04em;
+}
+.conversa { display: flex; flex-direction: column; gap: .5rem; }
+.balao {
+  max-width: 84%; padding: .6rem .85rem; border-radius: 13px;
+  font-size: .93rem; line-height: 1.45;
+  animation: surge .5s ease both;
+}
+.balao.dela { align-self: flex-end; background: #3E5F4A; color: #EAF3EC; border-bottom-right-radius: 4px; }
+.balao.bot  { align-self: flex-start; background: #F6F1EC; color: #2A2130; border-bottom-left-radius: 4px; }
+.balao.aviso { background: #F4E2DC; color: #6E2B1B; font-weight: 500; }
+.balao:nth-child(1) { animation-delay: .15s; }
+.balao:nth-child(2) { animation-delay: .75s; }
+.balao:nth-child(3) { animation-delay: 1.5s; }
+.balao:nth-child(4) { animation-delay: 2.1s; }
+@keyframes surge { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .balao { animation: none; }
+}
+
+/* --------------------------- seções --------------------------- */
+section { padding-block: 5.5rem; }
+.titulo-secao { font-size: clamp(1.7rem, 3.4vw, 2.3rem); font-weight: 640; max-width: 24ch; }
+.intro-secao { color: var(--tinta-fraca); max-width: var(--medida); margin-top: 1rem; }
+
+.grade { display: grid; gap: 1.5rem; margin-top: 3rem; }
+.tres { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 52rem) { .tres { grid-template-columns: 1fr; } }
+
+.cartao {
+  background: var(--chao-alta); border: 1px solid var(--borda);
+  border-radius: var(--raio); padding: 1.6rem;
+}
+.cartao h3 { font-size: 1.1rem; font-weight: 640; margin-bottom: .55rem; }
+.cartao p { color: var(--tinta-fraca); font-size: .95rem; }
+
+/* limites — o que ele não faz */
+.limites { background: var(--chao-alta); border-block: 1px solid var(--borda); }
+.lista-limites { list-style: none; padding: 0; margin: 2.5rem 0 0; display: grid; gap: 1rem;
+                 grid-template-columns: repeat(2, 1fr); max-width: 52rem; }
+@media (max-width: 46rem) { .lista-limites { grid-template-columns: 1fr; } }
+.lista-limites li { display: flex; gap: .8rem; align-items: flex-start; font-size: .96rem; }
+.lista-limites b { font-weight: 620; }
+.marca-x {
+  flex-shrink: 0; width: 1.4rem; height: 1.4rem; border-radius: 50%;
+  background: rgba(179,74,54,.12); color: var(--alerta);
+  display: grid; place-items: center; font-size: .8rem; margin-top: .1rem;
+}
+
+.citacao {
+  font-family: var(--serif); font-size: clamp(1.3rem, 2.8vw, 1.75rem);
+  line-height: 1.4; font-style: italic; max-width: 30ch; margin-top: 3rem;
+  color: var(--tinta);
+}
+.citacao footer { font-family: var(--sans); font-style: normal; font-size: .85rem;
+                  color: var(--tinta-fraca); margin-top: 1rem; letter-spacing: .01em; }
+
+/* --------------------------- preços --------------------------- */
+.precos { background: var(--bloco); color: var(--leite); }
+.precos .titulo-secao { color: var(--leite); }
+.precos .intro-secao { color: rgba(250,246,243,.7); }
+
+.planos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-top: 3rem;
+          align-items: start; }
+@media (max-width: 56rem) { .planos { grid-template-columns: 1fr; } }
+
+.plano {
+  background: var(--bloco-alta); border: 1px solid rgba(250,246,243,.12);
+  border-radius: var(--raio); padding: 1.9rem 1.6rem; display: flex; flex-direction: column;
+  gap: 1.2rem; height: 100%;
+}
+.plano.destaque { border-color: var(--ambar); box-shadow: 0 0 0 1px var(--ambar); }
+.plano .faixa {
+  display: inline-block; font-size: .7rem; text-transform: uppercase;
+  letter-spacing: .12em; font-weight: 650; color: #2A1E08; background: var(--ambar);
+  padding: .25rem .6rem; border-radius: 999px; align-self: flex-start;
+}
+.plano h3 { font-size: 1.15rem; font-weight: 640; }
+.plano .quem { color: rgba(250,246,243,.62); font-size: .9rem; margin-top: .3rem; }
+.valor { display: flex; align-items: baseline; gap: .35rem; font-variant-numeric: tabular-nums; }
+.valor .cifra { font-size: 1rem; color: rgba(250,246,243,.6); }
+.valor .n { font-size: 2.6rem; font-weight: 660; letter-spacing: -.03em; }
+.valor .por { font-size: .9rem; color: rgba(250,246,243,.6); }
+.plano ul { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; font-size: .93rem; }
+.plano li { display: flex; gap: .6rem; align-items: flex-start; color: rgba(250,246,243,.85); }
+.tique { color: var(--ambar); flex-shrink: 0; }
+.plano .botao { justify-content: center; margin-top: auto; }
+.plano .botao.vazio { border-color: rgba(250,246,243,.28); }
+
+.nota-preco { margin-top: 2rem; font-size: .86rem; color: rgba(250,246,243,.55);
+              max-width: var(--medida); }
+
+/* ---------------------------- FAQ ---------------------------- */
+.faq { display: grid; gap: 0; margin-top: 2.5rem; max-width: 46rem; }
+details { border-bottom: 1px solid var(--borda); }
+summary {
+  cursor: pointer; padding: 1.15rem 0; font-weight: 600; font-size: 1rem;
+  display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--ambar); font-size: 1.3rem; font-weight: 400; }
+details[open] summary::after { content: "−"; }
+details p { padding-bottom: 1.2rem; color: var(--tinta-fraca); font-size: .96rem;
+            max-width: var(--medida); }
+
+/* --------------------------- rodapé --------------------------- */
+.rodape { background: var(--chao-alta); border-top: 1px solid var(--borda);
+          padding-block: 3rem; font-size: .88rem; color: var(--tinta-fraca); }
+.rodape .emergencia {
+  border-left: 3px solid var(--alerta); padding-left: 1rem; margin-bottom: 2rem;
+  max-width: var(--medida); color: var(--tinta);
+}
+/* Identificação legal: destacada de propósito. É o que liga a marca à
+   empresa verificada, e num domínio próprio não há URL que faça isso. */
+.identidade {
+  margin-top: 2.5rem; padding: 1.25rem 1.4rem;
+  background: var(--chao); border: 1px solid var(--borda);
+  border-radius: var(--raio); max-width: 40rem;
+  display: grid; gap: .35rem; font-size: .88rem; line-height: 1.5;
+}
+.identidade p { margin: 0; }
+.identidade strong { color: var(--tinta); font-weight: 620; }
+.identidade a { color: var(--tinta); text-underline-offset: 2px; }
+
+.rodape-baixo { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between;
+                margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--borda); }
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <div class="env">
+    <div class="barra">
+      <div class="marca">LactAI<span>.</span></div>
+      <nav>
+        <a href="#como">Como funciona</a>
+        <a href="#limites">O que não fazemos</a>
+        <a href="#precos">Planos</a>
+        <a href="#duvidas">Dúvidas</a>
+      </nav>
+    </div>
+
+    <div class="heroi">
+      <div>
+        <div class="rotulo">Amamentação e cuidados com o bebê</div>
+        <h1 style="margin-top:1rem">São <em>três da manhã</em> e você tem uma dúvida.</h1>
+        <p class="sub">
+          Amamentação, sono, vacinas, febre, desenvolvimento. Mande no WhatsApp e
+          receba uma resposta em segundos — baseada em material técnico do
+          Ministério da Saúde, não em palpite de grupo de mães.
+        </p>
+        <div class="acoes">
+          <a class="botao cheio" href="#precos">Começar de graça</a>
+          <a class="botao vazio" href="#como">Ver como funciona</a>
+        </div>
+        <p class="selo">Sem instalar nada. Funciona no WhatsApp que você já usa.</p>
+      </div>
+
+      <div class="fone" aria-label="Exemplo de conversa com o assistente">
+        <div class="hora">03:14</div>
+        <div class="conversa">
+          <div class="balao dela">ele mama e solta o peito toda hora, tá errado?</div>
+          <div class="balao bot">
+            Isso é comum e nem sempre indica problema. Vale observar a pega: queixo
+            encostado na mama, boca bem aberta, lábio de baixo virado para fora.<br><br>
+            Quer que eu explique como corrigir a pega passo a passo?
+          </div>
+          <div class="balao dela">e se doer?</div>
+          <div class="balao bot aviso">
+            Dor persistente costuma ser sinal de pega inadequada — e merece avaliação
+            presencial se vier com fissura, vermelhidão ou febre.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="como">
+  <div class="env">
+    <div class="rotulo">Como funciona</div>
+    <h2 class="titulo-secao" style="margin-top:.75rem">Três coisas acontecem antes de você receber a resposta.</h2>
+    <p class="intro-secao">
+      Não é um chatbot genérico respondendo o que acha. Cada mensagem passa por
+      uma triagem antes de qualquer coisa.
+    </p>
+
+    <div class="grade tres">
+      <article class="cartao">
+        <h3>Sinal de alerta vem primeiro</h3>
+        <p>
+          Se você descrever algo que precisa de atendimento — dificuldade para respirar,
+          febre no recém-nascido, recusa em mamar — a conversa para e você é orientada
+          a procurar ajuda. Isso acontece antes de a inteligência artificial entrar.
+        </p>
+      </article>
+      <article class="cartao">
+        <h3>A resposta vem do material, não da internet</h3>
+        <p>
+          O conteúdo sai de publicações do Ministério da Saúde, das cadernetas da
+          criança e da literatura de aleitamento. Se a sua dúvida não estiver nesse
+          material, preferimos dizer que não sabemos.
+        </p>
+      </article>
+      <article class="cartao">
+        <h3>Gente de verdade quando precisa</h3>
+        <p>
+          Quando a dúvida sai do que dá para resolver por mensagem, você fala com uma
+          consultora de amamentação. É o que o plano pago cobre.
+        </p>
+      </article>
+    </div>
+
+    <blockquote class="citacao">
+      “Ninguém me contou que ia doer. E às quatro da manhã não tem para quem perguntar.”
+      <footer>O que ouvimos de quase toda mãe nas primeiras semanas.</footer>
+    </blockquote>
+  </div>
+</section>
+
+<section id="limites" class="limites">
+  <div class="env">
+    <div class="rotulo">Limites</div>
+    <h2 class="titulo-secao" style="margin-top:.75rem">O que este serviço não faz.</h2>
+    <p class="intro-secao">
+      Preferimos ser claras sobre isso na primeira tela, e não no rodapé.
+    </p>
+
+    <ul class="lista-limites">
+      <li>
+        <span class="marca-x" aria-hidden="true">✕</span>
+        <span><b>Não dá diagnóstico.</b> Nenhuma resposta aqui substitui exame e escuta
+        de um profissional que veja você e o bebê.</span>
+      </li>
+      <li>
+        <span class="marca-x" aria-hidden="true">✕</span>
+        <span><b>Não indica remédio nem dose.</b> Explicamos o que o material diz sobre
+        compatibilidade com a amamentação — quem prescreve é quem acompanha o seu caso.</span>
+      </li>
+      <li>
+        <span class="marca-x" aria-hidden="true">✕</span>
+        <span><b>Não atende emergência.</b> Em urgência, ligue <b>192</b> ou vá ao
+        pronto-socorro. Nenhum aplicativo é canal de socorro.</span>
+      </li>
+      <li>
+        <span class="marca-x" aria-hidden="true">✕</span>
+        <span><b>Não julga a sua escolha.</b> Amamentação exclusiva, mista ou fórmula —
+        a informação é a mesma e a decisão é sua.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="precos" class="precos">
+  <div class="env">
+    <div class="rotulo">Planos</div>
+    <h2 class="titulo-secao" style="margin-top:.75rem">Informação é de graça. Você paga por tempo de gente.</h2>
+    <p class="intro-secao">
+      Orientação básica sobre amamentação não deveria estar atrás de assinatura.
+      O que custa — e o que cobramos — é o acompanhamento humano.
+    </p>
+
+    <div class="planos">
+      <article class="plano">
+        <div>
+          <h3>Dúvidas</h3>
+          <p class="quem">Para toda mãe, desde a gestação</p>
+        </div>
+        <div class="valor"><span class="n">Grátis</span></div>
+        <ul>
+          <li><span class="tique" aria-hidden="true">✓</span> Perguntas ilimitadas, a qualquer hora</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Texto e áudio</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Triagem de sinais de alerta</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Sem cartão de crédito</li>
+        </ul>
+        <a class="botao vazio" href="#">Começar no WhatsApp</a>
+      </article>
+
+      <article class="plano destaque">
+        <span class="faixa">Mais escolhido</span>
+        <div>
+          <h3>Acompanhada</h3>
+          <p class="quem">Para os primeiros meses, quando aperta</p>
+        </div>
+        <div class="valor">
+          <span class="cifra">R$</span><span class="n">29</span><span class="por">,90 / mês</span>
+        </div>
+        <ul>
+          <li><span class="tique" aria-hidden="true">✓</span> Tudo do plano gratuito</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Uma consulta por mês com consultora de amamentação, por vídeo</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Resposta humana em até 24 h no chat</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Cancela quando quiser</li>
+        </ul>
+        <a class="botao cheio" href="#">Assinar</a>
+      </article>
+
+      <article class="plano">
+        <div>
+          <h3>Instituições</h3>
+          <p class="quem">Maternidades, planos de saúde e empresas</p>
+        </div>
+        <div class="valor"><span class="n">Sob consulta</span></div>
+        <ul>
+          <li><span class="tique" aria-hidden="true">✓</span> Preço por mãe atendida</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Material adaptado ao seu protocolo</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Relatórios de uso, sem dado identificável</li>
+          <li><span class="tique" aria-hidden="true">✓</span> Contrato e nota fiscal</li>
+        </ul>
+        <a class="botao vazio" href="#">Falar com a gente</a>
+      </article>
+    </div>
+
+    <p class="nota-preco">
+      O plano gratuito não tem pegadinha nem limite escondido de mensagens. Ele se
+      sustenta porque o custo de responder é baixo; o que não é barato é hora de
+      consultora — e é exatamente isso que o plano pago paga.
+    </p>
+  </div>
+</section>
+
+<section id="duvidas">
+  <div class="env">
+    <div class="rotulo">Dúvidas</div>
+    <h2 class="titulo-secao" style="margin-top:.75rem">O que perguntam antes de começar.</h2>
+
+    <div class="faq">
+      <details open>
+        <summary>Quem responde: uma pessoa ou um robô?</summary>
+        <p>
+          No plano gratuito, um assistente automatizado — e ele avisa isso na primeira
+          mensagem. No plano Acompanhada, você também fala com consultoras de
+          amamentação de verdade. A gente nunca finge que um é o outro.
+        </p>
+      </details>
+      <details>
+        <summary>E se ele responder alguma coisa errada?</summary>
+        <p>
+          Toda resposta precisa vir do material técnico que usamos. Quando o assistente
+          não encontra a informação lá, ele diz que não sabe em vez de inventar. Ainda
+          assim, ele não substitui avaliação profissional — e por isso a triagem de
+          sinais de alerta vem antes de qualquer resposta.
+        </p>
+      </details>
+      <details>
+        <summary>O que acontece com as minhas mensagens?</summary>
+        <p>
+          Usamos o que você escreve só para te responder. Não guardamos o conteúdo das
+          conversas nem vendemos dado para ninguém. Você pode mandar <b>SAIR</b> a
+          qualquer momento para encerrar e apagar seu histórico.
+        </p>
+      </details>
+      <details>
+        <summary>Preciso instalar alguma coisa?</summary>
+        <p>
+          Não. É uma conversa no WhatsApp que você já tem no celular. Sem aplicativo
+          novo, sem cadastro longo.
+        </p>
+      </details>
+      <details>
+        <summary>Serve para quem não está amamentando no peito?</summary>
+        <p>
+          Serve. Respondemos sobre fórmula, mamadeira, ordenha, relactação e a
+          transição entre eles. A informação não muda conforme a sua escolha.
+        </p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer class="rodape">
+  <div class="env">
+    <div class="emergencia">
+      <b>Em emergência, não use este serviço.</b> Ligue 192 (SAMU) ou vá ao
+      pronto-socorro mais próximo.
+    </div>
+    <p style="max-width:34rem">
+      O LactAI oferece informação educativa sobre amamentação e cuidados com o
+      bebê. Não realiza diagnóstico, não prescreve tratamento e não substitui
+      consulta com profissional de saúde.
+    </p>
+    <!-- Bloco de identificação: num domínio próprio, esta é a única prova
+         pública de que a marca pertence à empresa verificada na Meta.
+         Preencha razão social, CNPJ e endereço com os dados reais. -->
+    <div class="identidade">
+      <p>
+        <strong>LactAI</strong> é um produto da
+        <strong>Watanabe AI Tech LTDA</strong>
+      </p>
+      <p>
+        CNPJ 00.000.000/0001-00 ·
+        Rua Exemplo, 000 — Cidade/UF — CEP 00000-000
+      </p>
+      <p>
+        <a href="https://watanabeaitech.com.br">watanabeaitech.com.br</a> ·
+        <a href="mailto:contato@lactai.co">contato@lactai.co</a>
+      </p>
+    </div>
+
+    <div class="rodape-baixo">
+      <span>© 2026 Watanabe AI Tech</span>
+      <span>Privacidade · Termos</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

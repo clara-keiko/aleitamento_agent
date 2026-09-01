@@ -1,7 +1,7 @@
-# Landing do LactAI
+# Site do LactAI
 
-Página do produto, destinada a `watanabeaitech.com.br/lactai`. Arquivo único, sem
-dependência externa — sobe em qualquer hospedagem estática.
+Página do produto, destinada a **lactai.co**. Arquivo único, sem dependência externa
+— sobe em qualquer hospedagem estática.
 
 ```bash
 python3 -m http.server 8080 --directory landing
@@ -17,26 +17,44 @@ entre a marca e a empresa verificada esteja visível publicamente. Foi exatament
 isso que faltou quando "LactAI" foi recusado da primeira vez: o nome não existia em
 lugar nenhum que o revisor pudesse conferir.
 
-O rodapé já traz a linha no formato que a Meta procura:
-
-> **LactAI** é um produto da **Watanabe AI Tech** · CNPJ 00.000.000/0001-00
-
-Publicar em `watanabeaitech.com.br/lactai` reforça isso pela própria URL — a relação
-fica evidente antes mesmo de o revisor rolar até o rodapé.
+⚠️ **Em domínio próprio, o bloco de identificação do rodapé é a única prova dessa
+ligação.** Num caminho como `watanabeaitech.com.br/lactai`, a própria URL faria esse
+trabalho; em `lactai.co`, não há nada além do rodapé. Ele não é decoração — é o item
+que o revisor procura.
 
 ## Antes de publicar
 
-1. **Preencha o CNPJ** no rodapé (hoje está `00.000.000/0001-00`)
-2. **Troque o e-mail de contato** (`contato@exemplo.com.br`)
+1. **Preencha o bloco de identificação** no rodapé, com dados reais:
+   razão social completa, CNPJ, endereço da empresa
+2. **Troque o e-mail de contato** (`contato@lactai.co`)
 3. **Ligue os botões** — os `href="#"` precisam apontar para
    `https://wa.me/55DDDNUMERO` e para o checkout
 4. **Publique os links** de Privacidade e Termos, ou remova-os do rodapé enquanto
    não existirem
 
+## Hospedagem
+
+Site estático de um arquivo. As três opções gratuitas equivalentes:
+
+| Serviço | Como |
+|---|---|
+| **Cloudflare Pages** | Conecta o repositório, diretório `landing/`, sem build |
+| **Netlify** | Idem, ou arraste a pasta na interface |
+| **Vercel** | Idem |
+
+Depois aponte o DNS de `lactai.co` para o serviço escolhido (eles dão os registros) e
+confirme que o HTTPS ficou ativo — a Meta rejeita site sem certificado.
+
 ## Depois de publicar
 
-Aponte o site no portfólio empresarial: **Configurações do negócio → Informações da
-empresa → Site**. É assim que o revisor da Meta sabe onde procurar o nome.
+1. **Portfólio empresarial** → Configurações do negócio → *Informações da empresa* →
+   campo **Site** → `https://lactai.co`
+2. **Reenvie o nome de exibição** no WhatsApp Manager
+
+Reforço que vale o esforço: cite o LactAI também em `watanabeaitech.com.br`, com link
+para `lactai.co`. A Meta pede que a relação esteja clara **nos sites das duas partes**
+quando o nome de exibição difere da razão social — com as duas pontas ligadas, a
+análise deixa de depender de interpretação.
 
 ## Sobre os preços
 

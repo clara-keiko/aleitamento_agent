@@ -256,6 +256,18 @@ details p { padding-bottom: 1.2rem; color: var(--tinta-fraca); font-size: .96rem
   border-left: 3px solid var(--alerta); padding-left: 1rem; margin-bottom: 2rem;
   max-width: var(--medida); color: var(--tinta);
 }
+/* Identificação legal: destacada de propósito. É o que liga a marca à
+   empresa verificada, e num domínio próprio não há URL que faça isso. */
+.identidade {
+  margin-top: 2.5rem; padding: 1.25rem 1.4rem;
+  background: var(--chao); border: 1px solid var(--borda);
+  border-radius: var(--raio); max-width: 40rem;
+  display: grid; gap: .35rem; font-size: .88rem; line-height: 1.5;
+}
+.identidade p { margin: 0; }
+.identidade strong { color: var(--tinta); font-weight: 620; }
+.identidade a { color: var(--tinta); text-underline-offset: 2px; }
+
 .rodape-baixo { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between;
                 margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--borda); }
 </style>
@@ -512,9 +524,27 @@ details p { padding-bottom: 1.2rem; color: var(--tinta-fraca); font-size: .96rem
       bebê. Não realiza diagnóstico, não prescreve tratamento e não substitui
       consulta com profissional de saúde.
     </p>
+    <!-- Bloco de identificação: num domínio próprio, esta é a única prova
+         pública de que a marca pertence à empresa verificada na Meta.
+         Preencha razão social, CNPJ e endereço com os dados reais. -->
+    <div class="identidade">
+      <p>
+        <strong>LactAI</strong> é um produto da
+        <strong>Watanabe AI Tech LTDA</strong>
+      </p>
+      <p>
+        CNPJ 00.000.000/0001-00 ·
+        Rua Exemplo, 000 — Cidade/UF — CEP 00000-000
+      </p>
+      <p>
+        <a href="https://watanabeaitech.com.br">watanabeaitech.com.br</a> ·
+        <a href="mailto:contato@lactai.co">contato@lactai.co</a>
+      </p>
+    </div>
+
     <div class="rodape-baixo">
-      <span><strong>LactAI</strong> é um produto da <strong>Watanabe AI Tech</strong> · CNPJ 00.000.000/0001-00</span>
-      <span>Privacidade · Termos · contato@exemplo.com.br</span>
+      <span>© 2026 Watanabe AI Tech</span>
+      <span>Privacidade · Termos</span>
     </div>
   </div>
 </footer>

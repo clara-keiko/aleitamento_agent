@@ -2,16 +2,48 @@ services:
   - type: web
     name: aleitamento-agent
     runtime: python
+    # O plano free hiberna após 15 min: o primeiro webhook depois da pausa
+    # espera ~1 min de cold start e a Meta reentrega o evento nesse meio-tempo.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      - key: WHATSAPP_PROVIDER
+        value: meta
       - key: VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_TOKEN
         sync: false
       - key: PHONE_NUMBER_ID
         sync: false
+      - key: APP_SECRET
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: VECTOR_STORE_ID
         sync: false
+      - key: PSEUDONYM_KEY
+        generateValue: true
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      # gpt-5-mini raciocina antes de responder; esforço baixo mantém a
+      # latência aceitável no WhatsApp.
+      - key: REASONING_EFFORT
+        value: low
+      # 0 = o código escolhe o teto conforme o modelo. Ver .env.example.
+      - key: MAX_OUTPUT_TOKENS
+        value: "0"
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "45"
+      - key: MAX_RETRIEVAL_RESULTS
+        value: "8"
+      - key: ENABLE_WEB
+        value: "true"
+      # Defina no painel antes de compartilhar o link do protótipo.
+      - key: WEB_ACCESS_CODE
+        sync: false
+      - key: ENABLE_AUDIO
+        value: "true"
+      - key: REQUIRE_SIGNATURE
+        value: "true"

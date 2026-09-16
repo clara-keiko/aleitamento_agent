@@ -1,7 +1,7 @@
 # Site do LactAI
 
-Página do produto, destinada a **lactai.co**. Arquivo único, sem dependência externa
-— sobe em qualquer hospedagem estática.
+Página do produto, no ar em **https://aleitamento.com.br/lactai/**. Arquivo único,
+sem dependência externa — sobe em qualquer hospedagem estática.
 
 ```bash
 python3 -m http.server 8080 --directory landing
@@ -17,24 +17,33 @@ entre a marca e a empresa verificada esteja visível publicamente. Foi exatament
 isso que faltou quando "LactAI" foi recusado da primeira vez: o nome não existia em
 lugar nenhum que o revisor pudesse conferir.
 
-⚠️ **Em domínio próprio, o bloco de identificação do rodapé é a única prova dessa
-ligação.** Num caminho como `watanabeaitech.com.br/lactai`, a própria URL faria esse
-trabalho; em `lactai.co`, não há nada além do rodapé. Ele não é decoração — é o item
-que o revisor procura.
+⚠️ **O bloco de identificação do rodapé é a única prova dessa ligação.** A página mora
+num domínio de terceiro (`aleitamento.com.br`), então a URL não ajuda o revisor: nada
+nela contém "LactAI" nem "Watanabe". O rodapé não é decoração — é o item que ele
+procura, e por isso diz três coisas em ordem:
+
+1. quem **opera** o LactAI, com razão social e CNPJ — o mesmo CNPJ verificado no
+   portfólio empresarial;
+2. que a conta de WhatsApp que atende como LactAI é dessa empresa — que é exatamente
+   a afirmação sob análise no nome de exibição;
+3. por que a página está num domínio de outra empresa.
+
+O item 3 existe para fechar a lacuna que o revisor enxergaria sozinho. Sem ele a
+página parece de terceiro; com ele, a hospedagem vira informação declarada.
 
 ## Antes de publicar
 
-1. **Preencha o bloco de identificação** no rodapé, com dados reais:
-   razão social completa, CNPJ, endereço da empresa
-2. **Troque o e-mail de contato** (`contato@lactai.co`)
-3. **Ligue os botões** — os `href="#"` precisam apontar para
+1. **Troque o e-mail de contato** se `contato@watanabeaitech.com.br` não estiver ativo
+   — o revisor pode escrever
+2. **Ligue os botões** — os `href="#"` precisam apontar para
    `https://wa.me/55DDDNUMERO` e para o checkout
-4. **Publique os links** de Privacidade e Termos, ou remova-os do rodapé enquanto
+3. **Publique os links** de Privacidade e Termos, ou remova-os do rodapé enquanto
    não existirem
 
 ## Hospedagem
 
-Site estático de um arquivo. As três opções gratuitas equivalentes:
+Site estático de um arquivo — hoje servido dentro de `aleitamento.com.br`. Se um dia
+migrar para domínio próprio, as três opções gratuitas equivalentes:
 
 | Serviço | Como |
 |---|---|
@@ -42,19 +51,23 @@ Site estático de um arquivo. As três opções gratuitas equivalentes:
 | **Netlify** | Idem, ou arraste a pasta na interface |
 | **Vercel** | Idem |
 
-Depois aponte o DNS de `lactai.co` para o serviço escolhido (eles dão os registros) e
-confirme que o HTTPS ficou ativo — a Meta rejeita site sem certificado.
+Em qualquer caso, confirme que o HTTPS está ativo — a Meta rejeita site sem
+certificado.
 
 ## Depois de publicar
 
 1. **Portfólio empresarial** → Configurações do negócio → *Informações da empresa* →
-   campo **Site** → `https://lactai.co`
-2. **Reenvie o nome de exibição** no WhatsApp Manager
+   campo **Site** → `https://aleitamento.com.br/lactai/`
+2. **Publique a outra ponta**: uma menção ao LactAI em `watanabeaitech.com.br`, com
+   link para esta página. A Meta pede que a relação esteja clara **nos sites das duas
+   partes** quando o nome de exibição difere da razão social. Esta é a metade que
+   ainda falta — e é a mais fácil das duas, porque o domínio é seu.
+3. **Reenvie o nome de exibição** no WhatsApp Manager
 
-Reforço que vale o esforço: cite o LactAI também em `watanabeaitech.com.br`, com link
-para `lactai.co`. A Meta pede que a relação esteja clara **nos sites das duas partes**
-quando o nome de exibição difere da razão social — com as duas pontas ligadas, a
-análise deixa de depender de interpretação.
+Não dá para verificar `aleitamento.com.br` no seu portfólio (*Segurança da marca →
+Domínios*) se ele já estiver verificado em outro — um domínio pertence a um portfólio
+só. `watanabeaitech.com.br`, esse sim, vale verificar: é o domínio que sustenta a
+afirmação do rodapé.
 
 ## Sobre os preços
 

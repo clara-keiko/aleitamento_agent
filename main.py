@@ -194,7 +194,16 @@ async def receive_webhook(request: Request, background: BackgroundTasks) -> Resp
         signed_url = str(request.url)
 
     if not channel.verify_signature(raw_body, headers, signed_url):
-        log.warning("assinatura inválida no webhook; descartando")
+        # A mensagem antiga dizia só "inválida", e as três causas possíveis
+        # (URL divergente, credencial errada, header ausente) exigem ações
+        # opostas. Sem esses dados, depurar vira tentativa e erro.
+        log.warning(
+            "assinatura inválida no webhook; descartando "
+            "(url_conferida=%s origem_da_url=%s header_presente=%s)",
+            signed_url,
+            "PUBLIC_BASE_URL" if settings.public_base_url else "request.url",
+            bool(headers.get("x-twilio-signature") or headers.get("x-hub-signature-256")),
+        )
         return JSONResponse({"status": "forbidden"}, status_code=403)
 
     if not settings.ready:

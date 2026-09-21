@@ -6,6 +6,7 @@ demora, e uma chamada com file_search leva vários segundos. Processando de
 forma síncrona, a mãe recebia a mesma resposta duas ou três vezes.
 """
 
+import hashlib
 import hmac
 import json
 from pathlib import Path
@@ -179,6 +180,27 @@ def verify_webhook(
     return PlainTextResponse("Forbidden", status_code=403)
 
 
+def _impressao_da_credencial() -> str:
+    """Identifica *qual* segredo está em uso, sem revelá-lo.
+
+    Comparar o segredo do painel com o que o servidor carregou é o passo que
+    fecha o diagnóstico de assinatura — e é o passo que ninguém consegue dar,
+    porque o valor fica mascarado dos dois lados. O hash permite a comparação
+    sem expor nada: quem tem o valor certo reproduz a mesma impressão.
+    """
+    segredo = (
+        settings.twilio_auth_token
+        if settings.provider == PROVIDER_TWILIO
+        else settings.app_secret
+    )
+    if not segredo:
+        return "ausente"
+    digest = hashlib.sha256(segredo.encode()).hexdigest()[:8]
+    # Espaço em branco na colagem é invisível no painel e some no hash —
+    # por isso o comprimento vai junto.
+    return f"sha256:{digest} len={len(segredo)}"
+
+
 @app.post("/webhook")
 async def receive_webhook(request: Request, background: BackgroundTasks) -> Response:
     raw_body = await request.body()
@@ -199,10 +221,11 @@ async def receive_webhook(request: Request, background: BackgroundTasks) -> Resp
         # opostas. Sem esses dados, depurar vira tentativa e erro.
         log.warning(
             "assinatura inválida no webhook; descartando "
-            "(url_conferida=%s origem_da_url=%s header_presente=%s)",
+            "(url_conferida=%s origem_da_url=%s header_presente=%s credencial=%s)",
             signed_url,
             "PUBLIC_BASE_URL" if settings.public_base_url else "request.url",
             bool(headers.get("x-twilio-signature") or headers.get("x-hub-signature-256")),
+            _impressao_da_credencial(),
         )
         return JSONResponse({"status": "forbidden"}, status_code=403)
 

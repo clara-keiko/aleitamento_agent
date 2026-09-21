@@ -189,6 +189,64 @@ def cmd_nome(args: argparse.Namespace) -> int:
     return 0
 
 
+PERFIL = "whatsapp_business_profile"
+CAMPOS_DO_PERFIL = "about,address,description,email,vertical,websites"
+
+
+def cmd_perfil(args: argparse.Namespace) -> int:
+    """Mostra o perfil comercial — o cartão que a mãe vê ao abrir o contato."""
+    numero = _exigir("PHONE_NUMBER_ID")
+    try:
+        dados = _requisitar("GET", f"{numero}/{PERFIL}", {"fields": CAMPOS_DO_PERFIL})
+    except ErroDaMeta as erro:
+        print(erro)
+        return 1
+
+    if args.json:
+        print(json.dumps(dados, indent=2, ensure_ascii=False))
+        return 0
+
+    perfil = (dados.get("data") or [{}])[0]
+    _titulo("Perfil comercial do número")
+    for rotulo, chave in [
+        ("descrição", "description"), ("sobre", "about"), ("e-mail", "email"),
+        ("categoria", "vertical"), ("sites", "websites"),
+    ]:
+        valor = perfil.get(chave) or "—"
+        if isinstance(valor, list):
+            valor = ", ".join(valor) or "—"
+        print(f"  {rotulo:<10} {valor}")
+    return 0
+
+
+def cmd_perfil_site(args: argparse.Namespace) -> int:
+    """Grava o site do perfil comercial.
+
+    Não substitui o campo *Site* do portfólio — são coisas diferentes. Mas é
+    um sinal público a mais ligando o número à página do produto, e este dá
+    para gravar por API.
+    """
+    numero = _exigir("PHONE_NUMBER_ID")
+    if not args.url.startswith("https://"):
+        sys.exit("A Meta só aceita site com https.")
+
+    campos = {"messaging_product": "whatsapp", "websites": json.dumps([args.url])}
+    if args.descricao:
+        campos["description"] = args.descricao
+    if args.email:
+        campos["email"] = args.email
+
+    try:
+        resposta = _requisitar("POST", f"{numero}/{PERFIL}", campos)
+    except ErroDaMeta as erro:
+        print(erro)
+        return 1
+
+    print(json.dumps(resposta, indent=2, ensure_ascii=False))
+    print("\nConfira com: python3 scripts/meta_admin.py perfil")
+    return 0
+
+
 def cmd_dominios(args: argparse.Namespace) -> int:
     negocio = _exigir("BUSINESS_ID")
     try:
@@ -254,6 +312,13 @@ def main() -> int:
     p_nome.add_argument("--confirmar", action="store_true",
                         help="envia de verdade (sem isso, só simula)")
 
+    sub.add_parser("perfil", help="mostra o perfil comercial do número")
+
+    p_site = sub.add_parser("perfil-site", help="grava o site do perfil comercial")
+    p_site.add_argument("url")
+    p_site.add_argument("--descricao", help="descrição curta do serviço")
+    p_site.add_argument("--email", help="e-mail de contato público")
+
     sub.add_parser("dominios", help="lista os domínios do portfólio")
 
     p_add = sub.add_parser("dominio-add", help="acrescenta um domínio ao portfólio")
@@ -269,6 +334,8 @@ def main() -> int:
     comandos = {
         "status": cmd_status,
         "nome": cmd_nome,
+        "perfil": cmd_perfil,
+        "perfil-site": cmd_perfil_site,
         "dominios": cmd_dominios,
         "dominio-add": cmd_dominio_add,
     }

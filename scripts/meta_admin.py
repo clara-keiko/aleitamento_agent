@@ -28,6 +28,7 @@ o mais fácil da interface inteira. Este script cobre o resto.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -189,6 +190,98 @@ def cmd_nome(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_descobrir(args: argparse.Namespace) -> int:
+    """Descobre os IDs da conta e imprime o link direto de cada tela.
+
+    Existe porque a navegação do Gerenciador é o ponto onde todo mundo trava:
+    os nomes das telas mudam, e o mesmo item aparece em interfaces diferentes.
+    Com os IDs em mãos, dá para pular o menu e ir pela URL.
+
+    Cada etapa falha em silêncio parcial — imprime o erro e segue. Um token
+    sem permissão de business ainda descobre o app e o número.
+    """
+    token = os.environ["META_TOKEN"].strip()
+    app_id = None
+    negocios: list[dict] = []
+
+    _titulo("Token")
+    try:
+        info = _requisitar("GET", "debug_token", {"input_token": token}).get("data", {})
+        app_id = info.get("app_id")
+        print(f"  app_id     {app_id or '—'}")
+        print(f"  tipo       {info.get('type', '—')}")
+        expira = info.get("expires_at")
+        if expira == 0:
+            print("  validade   permanente (System User) ✅")
+        elif expira:
+            quando = datetime.datetime.fromtimestamp(expira)
+            restante = quando - datetime.datetime.now()
+            horas = restante.total_seconds() / 3600
+            marca = "⚠️  TEMPORÁRIO" if horas < 48 else ""
+            print(f"  validade   expira em {quando:%d/%m %H:%M} "
+                  f"({horas:.0f}h) {marca}")
+            if horas < 48:
+                print("             → Gere um token de System User antes de"
+                      " configurar o Render, ou o bot para em algumas horas.")
+        escopos = info.get("scopes") or []
+        print(f"  permissões {', '.join(escopos) if escopos else '—'}")
+        for necessaria in ("whatsapp_business_management", "business_management"):
+            if necessaria not in escopos:
+                print(f"             ⚠️  falta {necessaria}")
+    except ErroDaMeta as erro:
+        print(erro)
+
+    _titulo("Portfólios empresariais")
+    try:
+        negocios = _requisitar("GET", "me/businesses", {"fields": "id,name"}).get("data", [])
+        for negocio in negocios:
+            print(f"  {negocio.get('name')}  (id {negocio.get('id')})")
+        if not negocios:
+            print("  nenhum visível para este token")
+    except ErroDaMeta as erro:
+        print(erro)
+
+    for negocio in negocios:
+        try:
+            wabas = _requisitar(
+                "GET", f"{negocio['id']}/owned_whatsapp_business_accounts",
+                {"fields": "id,name"},
+            ).get("data", [])
+        except ErroDaMeta as erro:
+            print(erro)
+            continue
+
+        for waba in wabas:
+            _titulo(f"WABA {waba.get('name')} (id {waba.get('id')})")
+            try:
+                numeros = _requisitar(
+                    "GET", f"{waba['id']}/phone_numbers",
+                    {"fields": "id,display_phone_number,verified_name,name_status"},
+                ).get("data", [])
+                for numero in numeros:
+                    print(f"  {numero.get('display_phone_number')} — "
+                          f"{numero.get('verified_name')} "
+                          f"[{numero.get('name_status')}]")
+                    print(f"     PHONE_NUMBER_ID={numero.get('id')}")
+            except ErroDaMeta as erro:
+                print(erro)
+
+    _titulo("Links diretos")
+    if app_id:
+        base = f"https://developers.facebook.com/apps/{app_id}"
+        print(f"  APP_SECRET        {base}/settings/basic/")
+        print(f"  Webhook/WhatsApp  {base}/whatsapp-business/wa-settings/")
+    else:
+        print("  (sem app_id — abra https://developers.facebook.com/apps)")
+    for negocio in negocios:
+        bid = negocio["id"]
+        print(f"  Info da empresa   https://business.facebook.com/settings/info"
+              f"?business_id={bid}")
+        print(f"  WhatsApp Manager  https://business.facebook.com/wa/manage"
+              f"/phone-numbers/?business_id={bid}")
+    return 0
+
+
 PERFIL = "whatsapp_business_profile"
 CAMPOS_DO_PERFIL = "about,address,description,email,vertical,websites"
 
@@ -305,6 +398,9 @@ def main() -> int:
                             help="imprime a resposta crua da Meta")
     sub = analisador.add_subparsers(dest="comando", required=True)
 
+    sub.add_parser("descobrir",
+                   help="descobre IDs e imprime o link direto de cada tela")
+
     sub.add_parser("status", help="mostra o estado do número e do nome")
 
     p_nome = sub.add_parser("nome", help="envia um nome de exibição para análise")
@@ -332,6 +428,7 @@ def main() -> int:
         sys.exit("Falta META_TOKEN no ambiente. Veja o cabeçalho deste arquivo.")
 
     comandos = {
+        "descobrir": cmd_descobrir,
         "status": cmd_status,
         "nome": cmd_nome,
         "perfil": cmd_perfil,

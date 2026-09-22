@@ -63,15 +63,22 @@ Sem o header `apikey`, a resposta tem que ser **403**.
 
 Ela roda em Docker. No Render: **New → Web Service → Deploy an existing image**.
 
-⚠️ Nome de imagem, variáveis e rotas abaixo vêm do que se conhece da v2 e **não
-foram conferidos contra a documentação corrente** — confira em
-`doc.evolution-api.com` antes. Se algo divergir, o erro aparece na resposta da
-própria Evolution.
-
 ```
-Imagem:  atendai/evolution-api:latest
+Imagem:  docker.io/evoapicloud/evolution-api:v2.3.7
 Porta:   8080
 ```
+
+Duas escolhas por trás disso. O repositório é o **`evoapicloud`**, não o
+`atendai` que aparece em tutoriais antigos — aquele parou em fevereiro de 2025.
+E a versão é **fixa**: o `latest` do `evoapicloud` aponta para uma candidata a
+versão, que não é onde se pareia um número em uso.
+
+Se o Render disser *"No public image found"*, é quase sempre o nome sem o
+prefixo `docker.io/`.
+
+⚠️ Variáveis e rotas abaixo vêm do que se conhece da v2 e **não foram conferidas
+contra a documentação corrente** — confira em `doc.evolution-api.com`. Se algo
+divergir, o erro aparece na resposta da própria Evolution.
 
 Variáveis:
 

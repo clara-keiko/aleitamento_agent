@@ -12,13 +12,17 @@
 # mesma máquina, use http://host.docker.internal:8000/webhook como URL do
 # webhook (o agente na porta 8000 do host).
 #
-# ⚠️ Nomes de imagem e variáveis vêm do que se conhece da v2 e não foram
-# conferidos contra a documentação corrente. Se algo divergir, o log do
-# contêiner diz o quê: docker compose logs -f evolution
+# A imagem é a do repositório mantido: atendai/evolution-api parou em
+# fev/2025. Versão fixa de propósito — o `latest` de lá aponta para uma
+# candidata a versão, que não é onde se pareia um número em uso.
+#
+# ⚠️ As variáveis abaixo vêm do que se conhece da v2 e não foram conferidas
+# contra a documentação corrente. Se algo divergir, o log do contêiner diz o
+# quê: docker compose logs -f evolution
 
 services:
   evolution:
-    image: atendai/evolution-api:latest
+    image: docker.io/evoapicloud/evolution-api:v2.3.7
     restart: unless-stopped
     ports:
       - "8080:8080"

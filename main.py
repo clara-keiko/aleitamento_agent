@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from app.channels import build_channel
 from app.channels.meta_cloud import MetaCloudChannel
 from app.channels.web import WebChannel
-from app.config import PROVIDER_TWILIO, settings
+from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, settings
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
 from app.pipeline import MessagePipeline
@@ -188,17 +188,17 @@ def _impressao_da_credencial() -> str:
     porque o valor fica mascarado dos dois lados. O hash permite a comparação
     sem expor nada: quem tem o valor certo reproduz a mesma impressão.
     """
-    segredo = (
-        settings.twilio_auth_token
-        if settings.provider == PROVIDER_TWILIO
-        else settings.app_secret
-    )
+    segredos = {
+        PROVIDER_TWILIO: ("TWILIO_AUTH_TOKEN", settings.twilio_auth_token),
+        PROVIDER_EVOLUTION: ("EVOLUTION_API_KEY", settings.evolution_api_key),
+    }
+    nome, segredo = segredos.get(settings.provider, ("APP_SECRET", settings.app_secret))
     if not segredo:
-        return "ausente"
+        return f"{nome}=ausente"
     digest = hashlib.sha256(segredo.encode()).hexdigest()[:8]
     # Espaço em branco na colagem é invisível no painel e some no hash —
     # por isso o comprimento vai junto.
-    return f"sha256:{digest} len={len(segredo)}"
+    return f"{nome}=sha256:{digest} len={len(segredo)}"
 
 
 @app.post("/webhook")

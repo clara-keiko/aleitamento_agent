@@ -63,11 +63,14 @@ custo 2,7×, porque hospedagem domina:
 Ou seja: as faixas **não** são preço por custo. São preço por valor, com o custo
 apenas definindo o piso.
 
-⚠️ **O plano Balcão é o mais arriscado dos quatro.** R$ 89 de margem é uma ligação
-de meia hora. Ele só se sustenta com suporte assíncrono — por isso a tabela promete
-"resposta em 1 dia útil" nessa faixa e não menciona telefone. Se na prática o
-cliente de R$ 129 ligar toda semana, o plano está errado e é para subir o preço,
-não para engolir.
+⚠️ **O plano Balcão é o mais arriscado dos quatro.** R$ 89 de margem é meia hora
+sua. Por isso o suporte é **por mensagem em todas as faixas** — o que varia entre
+elas é o tempo de resposta, não o canal.
+
+Essa é uma decisão de margem, não de mesquinhez. Uma ligação não tem fim previsível
+e não deixa registro; mensagem é interrompível, responde-se em lote e fica
+documentada. Se na prática o cliente de R$ 129 consumir mais que isso, o plano está
+errado e é para subir o preço, não para engolir.
 
 ### Sobre os números
 

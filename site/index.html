@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watanabe AI Tech</title>
+<meta name="description" content="Agentes de IA e automações para pequenas empresas. Implantação com medição e número próprio.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --tinta:#12161A;
+  --papel:#F1F0EC;
+  --papel-alto:#FFFFFF;
+  --traco:#D6D4CC;
+  --traco-forte:#B4B1A7;
+  --suave:#5B6068;
+  --acento:#1C5D4A;
+  --acento-claro:#E4EDE8;
+  --sinal:#B2451C;
+  --sombra:0 1px 2px rgba(18,22,26,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --tinta:#EDECE7;
+    --papel:#14181B;
+    --papel-alto:#1C2125;
+    --traco:#2E343A;
+    --traco-forte:#454C53;
+    --suave:#9BA3AB;
+    --acento:#6FBFA3;
+    --acento-claro:#1B2E28;
+    --sinal:#E08256;
+    --sombra:0 1px 2px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --tinta:#EDECE7;
+  --papel:#14181B;
+  --papel-alto:#1C2125;
+  --traco:#2E343A;
+  --traco-forte:#454C53;
+  --suave:#9BA3AB;
+  --acento:#6FBFA3;
+  --acento-claro:#1B2E28;
+  --sinal:#E08256;
+  --sombra:0 1px 2px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--papel); color:var(--tinta);
+  font-family:"Source Serif 4",Georgia,serif;
+  font-size:17px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.env{max-width:62rem; margin:0 auto; padding-inline:1.25rem}
+
+h1,h2,h3,.rotulo,.botao,nav a,.marca{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2rem,5.2vw,3.4rem); line-height:1.08; font-weight:800;
+   letter-spacing:-.022em; text-wrap:balance; margin:0}
+h2{font-size:clamp(1.5rem,3vw,2.05rem); line-height:1.16; font-weight:700;
+   letter-spacing:-.015em; text-wrap:balance; margin:0}
+h3{font-size:1.06rem; font-weight:600; letter-spacing:-.005em; margin:0}
+p{margin:0}
+a{color:inherit}
+
+.rotulo{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.72rem; text-transform:uppercase; letter-spacing:.14em;
+  color:var(--suave); font-weight:500;
+}
+.dado{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+
+/* ── topo ───────────────────────────────────────────────────── */
+.barra{
+  display:flex; align-items:baseline; justify-content:space-between;
+  gap:1rem; flex-wrap:wrap;
+  padding-block:1.5rem 1.25rem;
+  border-bottom:1px solid var(--traco);
+}
+.marca{font-weight:800; letter-spacing:-.02em; font-size:1.05rem}
+.marca span{color:var(--acento)}
+nav{display:flex; gap:1.5rem; flex-wrap:wrap}
+nav a{font-size:.85rem; text-decoration:none; color:var(--suave)}
+nav a:hover{color:var(--acento)}
+
+/* ── herói ──────────────────────────────────────────────────── */
+.heroi{padding-block:4rem 3rem; display:grid; gap:1.75rem; max-width:44rem}
+.heroi .sub{font-size:1.16rem; color:var(--suave); max-width:36rem}
+.heroi em{font-style:normal; color:var(--acento)}
+
+.acoes{display:flex; gap:.85rem; flex-wrap:wrap; align-items:center}
+.botao{
+  display:inline-block; padding:.72rem 1.4rem; border-radius:2px;
+  background:var(--tinta); color:var(--papel); text-decoration:none;
+  font-size:.92rem; font-weight:600; letter-spacing:.005em;
+  border:1px solid var(--tinta);
+}
+.botao:hover{background:var(--acento); border-color:var(--acento); color:#fff}
+.botao.vazado{background:transparent; color:var(--tinta)}
+.botao.vazado:hover{background:transparent; color:var(--acento); border-color:var(--acento)}
+
+/* ── ficha técnica ──────────────────────────────────────────── */
+.ficha{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));
+  border-top:1px solid var(--traco-forte); border-bottom:1px solid var(--traco);
+}
+.ficha div{padding:1.1rem 1.2rem 1.15rem; border-right:1px solid var(--traco)}
+.ficha div:last-child{border-right:0}
+.ficha b{
+  display:block; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:1.5rem; font-weight:500; letter-spacing:-.02em; color:var(--acento);
+}
+.ficha small{display:block; margin-top:.3rem; font-size:.82rem; color:var(--suave); line-height:1.4}
+
+/* ── seções ─────────────────────────────────────────────────── */
+section{padding-block:3.5rem; border-bottom:1px solid var(--traco)}
+.cabeca{display:grid; gap:.8rem; max-width:40rem; margin-bottom:2.25rem}
+.cabeca p{color:var(--suave)}
+
+/* lista de serviços, no formato de especificação */
+.servicos{display:grid; gap:0}
+.servico{
+  display:grid; grid-template-columns:minmax(0,14rem) minmax(0,1fr);
+  gap:1.5rem 2.5rem; padding-block:1.75rem;
+  border-top:1px solid var(--traco);
+}
+.servico:first-child{border-top:1px solid var(--traco-forte)}
+.servico h3{margin-bottom:.35rem}
+.servico .para{color:var(--suave); font-size:.95rem}
+.servico ul{margin:.85rem 0 0; padding-left:1.1rem; display:grid; gap:.35rem}
+.servico li{font-size:.96rem}
+.servico li::marker{color:var(--acento)}
+
+/* processo — numerado porque é sequência de verdade */
+.etapas{display:grid; gap:0; counter-reset:etapa}
+.etapa{
+  display:grid; grid-template-columns:auto minmax(0,1fr); gap:1.4rem;
+  padding-block:1.4rem; border-top:1px solid var(--traco); align-items:baseline;
+}
+.etapa:first-child{border-top:1px solid var(--traco-forte)}
+.etapa::before{
+  counter-increment:etapa; content:counter(etapa,decimal-leading-zero);
+  font-family:"IBM Plex Mono",monospace; font-size:.85rem;
+  color:var(--acento); font-weight:500;
+}
+.etapa h3{margin-bottom:.25rem}
+.etapa p{color:var(--suave); font-size:.95rem}
+.etapa .prazo{
+  font-family:"IBM Plex Mono",monospace; font-size:.74rem;
+  color:var(--suave); text-transform:uppercase; letter-spacing:.1em;
+  display:block; margin-top:.4rem;
+}
+
+/* preços */
+.planos{display:grid; grid-template-columns:repeat(auto-fit,minmax(16rem,1fr)); gap:1.25rem}
+.plano{
+  background:var(--papel-alto); border:1px solid var(--traco);
+  border-radius:3px; padding:1.6rem 1.5rem 1.75rem; box-shadow:var(--sombra);
+  display:grid; gap:.9rem; align-content:start;
+}
+.plano.destaque{border-color:var(--acento); border-width:1px; box-shadow:none}
+.plano.destaque .rotulo{color:var(--acento)}
+.preco{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+       font-size:1.85rem; font-weight:500; letter-spacing:-.025em; line-height:1}
+.preco small{font-size:.82rem; color:var(--suave); font-weight:400; letter-spacing:0}
+.plano ul{margin:0; padding-left:1.05rem; display:grid; gap:.4rem}
+.plano li{font-size:.93rem}
+.plano li::marker{color:var(--acento)}
+.nota-preco{
+  margin-top:1.75rem; padding:1.15rem 1.3rem; background:var(--acento-claro);
+  border-left:2px solid var(--acento); font-size:.95rem; border-radius:0 3px 3px 0;
+}
+
+/* limites */
+.limites{display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1.5rem 2.5rem}
+.limite{display:grid; gap:.4rem; padding-top:1rem; border-top:2px solid var(--sinal)}
+.limite h3{font-size:1rem}
+.limite p{font-size:.94rem; color:var(--suave)}
+
+/* caso */
+.caso{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));
+  gap:1.5rem; margin-top:1.75rem;
+  border-top:1px solid var(--traco-forte); padding-top:1.5rem;
+}
+.caso div b{
+  display:block; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:1.3rem; font-weight:500; color:var(--acento); letter-spacing:-.02em;
+}
+.caso div small{display:block; margin-top:.25rem; font-size:.85rem; color:var(--suave); line-height:1.45}
+
+/* contato */
+.contato{padding-block:3.5rem 2rem; display:grid; gap:1.5rem; max-width:40rem}
+
+footer{padding-block:2rem 3rem; border-top:1px solid var(--traco); display:grid; gap:1rem}
+.identidade{font-size:.88rem; color:var(--suave); display:grid; gap:.3rem; line-height:1.55}
+.identidade strong{color:var(--tinta); font-weight:600}
+.rodape-baixo{
+  display:flex; flex-wrap:wrap; gap:1.25rem; justify-content:space-between;
+  font-size:.82rem; color:var(--suave); padding-top:1rem; border-top:1px solid var(--traco);
+}
+
+@media (max-width:640px){
+  .servico{grid-template-columns:minmax(0,1fr); gap:.75rem}
+  .ficha div{border-right:0; border-bottom:1px solid var(--traco)}
+  .ficha div:last-child{border-bottom:0}
+}
+a:focus-visible,.botao:focus-visible{outline:2px solid var(--acento); outline-offset:3px}
+</style>
+</head>
+<body>
+
+<div class="env">
+
+  <header class="barra">
+    <div class="marca">Watanabe<span>.</span>AI Tech</div>
+    <nav>
+      <a href="#servicos">O que fazemos</a>
+      <a href="#processo">Como funciona</a>
+      <a href="#precos">Preços</a>
+      <a href="#limites">O que não fazemos</a>
+      <a href="#contato">Falar com a gente</a>
+    </nav>
+  </header>
+
+  <div class="heroi">
+    <p class="rotulo">Agentes de IA para pequenas empresas</p>
+    <h1>Seu cliente manda mensagem às onze da noite. Alguém precisa responder.</h1>
+    <p class="sub">
+      Instalamos agentes de IA que atendem no WhatsApp a partir do material da
+      sua empresa — e que <em>sabem a hora de chamar uma pessoa</em>. Você não
+      lida com a burocracia da Meta: a gente configura, mede e entrega
+      funcionando.
+    </p>
+    <div class="acoes">
+      <a class="botao" href="#contato">Agendar uma conversa</a>
+      <a class="botao vazado" href="#precos">Ver preços</a>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div>
+      <b>4 semanas</b>
+      <small>do primeiro encontro ao agente no ar</small>
+    </div>
+    <div>
+      <b>24/7</b>
+      <small>sem fila, sem horário comercial</small>
+    </div>
+    <div>
+      <b>R$ 0,25</b>
+      <small>custo de IA por usuário ativo/mês, medido</small>
+    </div>
+    <div>
+      <b>100%</b>
+      <small>das respostas saem do material que você aprovou</small>
+    </div>
+  </div>
+
+  <section id="servicos">
+    <div class="cabeca">
+      <p class="rotulo">O que instalamos</p>
+      <h2>Três coisas, feitas bem</h2>
+      <p>
+        Não vendemos "transformação digital". Vendemos três serviços que
+        resolvem problemas que você consegue nomear.
+      </p>
+    </div>
+
+    <div class="servicos">
+
+      <article class="servico">
+        <div>
+          <h3>Atendimento no WhatsApp</h3>
+          <p class="para">O mais procurado</p>
+        </div>
+        <div>
+          <p>
+            Um agente que responde as dúvidas dos seus clientes a partir do seu
+            catálogo, das suas políticas e do seu material — e só dali. Quando a
+            pergunta sai do que ele sabe, ele passa para alguém do seu time em
+            vez de inventar.
+          </p>
+          <ul>
+            <li>Responde texto e áudio, que é como a maioria das pessoas escreve</li>
+            <li>Encaminha para humano com o histórico da conversa junto</li>
+            <li>Funciona no seu número, com o nome da sua empresa</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="servico">
+        <div>
+          <h3>Qualificação e agendamento</h3>
+          <p class="para">Para quem vende por conversa</p>
+        </div>
+        <div>
+          <p>
+            O agente recebe o contato, faz as perguntas que seu time faria,
+            descarta o que não é cliente e agenda o que é — direto na agenda que
+            você já usa.
+          </p>
+          <ul>
+            <li>Seu time recebe o lead já com as respostas na mão</li>
+            <li>Confirmação e lembrete automáticos, que derrubam o não-comparecimento</li>
+            <li>Relatório do que entrou e do que virou reunião</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="servico">
+        <div>
+          <h3>Automações internas</h3>
+          <p class="para">Por projeto</p>
+        </div>
+        <div>
+          <p>
+            Trabalho repetitivo que hoje consome uma pessoa: montar orçamento a
+            partir de uma lista, extrair dados de nota e pedido, triar e-mail,
+            preencher planilha e sistema.
+          </p>
+          <ul>
+            <li>Começamos medindo quantas horas a tarefa custa hoje</li>
+            <li>Só seguimos se a conta fechar a seu favor</li>
+          </ul>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="processo">
+    <div class="cabeca">
+      <p class="rotulo">Como funciona</p>
+      <h2>Quatro semanas, com você vendo cada etapa</h2>
+      <p>
+        A ordem importa: medir antes de entregar é o que separa um agente que
+        funciona de um que parece funcionar.
+      </p>
+    </div>
+
+    <div class="etapas">
+      <article class="etapa">
+        <div>
+          <h3>Levantamento</h3>
+          <p>
+            Lemos seu material e ouvimos quem atende hoje. Mapeamos as perguntas
+            que mais aparecem e, principalmente, as que o agente <em>não</em>
+            deve responder sozinho.
+          </p>
+          <span class="prazo">Semana 1 · 2 encontros</span>
+        </div>
+      </article>
+
+      <article class="etapa">
+        <div>
+          <h3>Construção</h3>
+          <p>
+            Montamos a base de conhecimento com o seu conteúdo e escrevemos as
+            regras de escalonamento — o que vira resposta, o que vira "vou te
+            passar para a Ana".
+          </p>
+          <span class="prazo">Semana 2</span>
+        </div>
+      </article>
+
+      <article class="etapa">
+        <div>
+          <h3>Medição</h3>
+          <p>
+            Rodamos o agente contra um conjunto de casos de teste montado a
+            partir do seu atendimento real. Você lê as respostas e aprova, uma a
+            uma, antes de qualquer cliente ver.
+          </p>
+          <span class="prazo">Semana 3 · entrega do relatório</span>
+        </div>
+      </article>
+
+      <article class="etapa">
+        <div>
+          <h3>Entrada no ar</h3>
+          <p>
+            Cuidamos do número, do cadastro na Meta e da homologação. Treinamos
+            seu time para receber o que for encaminhado. Acompanhamos de perto
+            as duas primeiras semanas.
+          </p>
+          <span class="prazo">Semana 4</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="precos">
+    <div class="cabeca">
+      <p class="rotulo">Preços</p>
+      <h2>Implantação uma vez, operação por mês</h2>
+      <p>
+        Sem surpresa no meio do caminho. O que muda o valor da implantação é o
+        tamanho do material e quantas integrações o agente precisa ter.
+      </p>
+    </div>
+
+    <div class="planos">
+      <div class="plano">
+        <p class="rotulo">Implantação</p>
+        <p class="preco">R$ 3.900 <small>a partir de</small></p>
+        <p style="color:var(--suave); font-size:.94rem">Uma vez, nas quatro semanas.</p>
+        <ul>
+          <li>Base de conhecimento montada com o seu material</li>
+          <li>Regras de escalonamento para humano</li>
+          <li>Relatório de medição antes da entrada no ar</li>
+          <li>Cadastro do número e homologação na Meta</li>
+          <li>Treinamento do time</li>
+        </ul>
+      </div>
+
+      <div class="plano destaque">
+        <p class="rotulo">Operação · mensal</p>
+        <p class="preco">R$ 590 <small>/mês</small></p>
+        <p style="color:var(--suave); font-size:.94rem">Enquanto o agente estiver no ar.</p>
+        <ul>
+          <li>Hospedagem, monitoramento e correções</li>
+          <li>Atualização do conteúdo quando seu negócio mudar</li>
+          <li>Relatório mensal do que foi perguntado</li>
+          <li>Suporte por WhatsApp em horário comercial</li>
+          <li>Consumo de IA incluído até 3.000 atendimentos/mês</li>
+        </ul>
+      </div>
+
+      <div class="plano">
+        <p class="rotulo">Automações</p>
+        <p class="preco">R$ 2.500 <small>por projeto</small></p>
+        <p style="color:var(--suave); font-size:.94rem">Escopo fechado, preço fechado.</p>
+        <ul>
+          <li>Levantamento das horas que a tarefa custa hoje</li>
+          <li>Proposta com o retorno estimado antes de começar</li>
+          <li>Entrega funcionando no seu sistema</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="nota-preco">
+      <strong>Para comparar:</strong> um atendente custa entre R$ 2.000 e R$ 3.000
+      por mês, mais encargos, e atende oito horas por dia. O agente atende as
+      vinte e quatro, e o seu time passa a cuidar só do que é difícil — que é
+      onde uma pessoa faz diferença.
+    </p>
+  </section>
+
+  <section id="limites">
+    <div class="cabeca">
+      <p class="rotulo">Transparência</p>
+      <h2>O que não fazemos</h2>
+      <p>
+        Declarar o limite cedo economiza o tempo de todo mundo — e diz mais
+        sobre como trabalhamos do que qualquer promessa.
+      </p>
+    </div>
+
+    <div class="limites">
+      <div class="limite">
+        <h3>Não conectamos por QR code</h3>
+        <p>
+          Existe um atalho que dispensa cadastro: ler o QR do WhatsApp Web. É
+          mais rápido, é mais barato e viola os termos do WhatsApp — o número
+          pode ser banido sem aviso e sem recurso. Usamos só a API oficial.
+        </p>
+      </div>
+
+      <div class="limite">
+        <h3>Não prometemos substituir seu time</h3>
+        <p>
+          Um agente bom resolve o repetitivo e entrega o resto para uma pessoa,
+          com contexto. Quem vende "demissão por IA" está vendendo a parte que
+          quebra primeiro.
+        </p>
+      </div>
+
+      <div class="limite">
+        <h3>Não deixamos o agente inventar</h3>
+        <p>
+          Se a resposta não sai do material que você aprovou, ele não responde —
+          diz que não sabe e encaminha. Menos respostas, e nenhuma errada.
+        </p>
+      </div>
+
+      <div class="limite">
+        <h3>Não ficamos com o seu número</h3>
+        <p>
+          A conta do WhatsApp fica no CNPJ da sua empresa, com a gente como
+          administradora. Se um dia você quiser sair, leva o número, o histórico
+          e a base junto.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="cabeca">
+      <p class="rotulo">Em operação</p>
+      <h2>LactAI — amamentação e puericultura</h2>
+      <p>
+        Agente que responde dúvidas de mães no WhatsApp, 24 horas por dia, a
+        partir de material técnico de puericultura. O caso mais exigente que
+        atendemos: quando a pergunta envolve risco, ele não responde — orienta a
+        procurar atendimento.
+      </p>
+    </div>
+
+    <div class="caso">
+      <div>
+        <b>47</b>
+        <small>casos de teste revisados antes de entrar no ar</small>
+      </div>
+      <div>
+        <b>217</b>
+        <small>verificações automáticas rodando a cada mudança</small>
+      </div>
+      <div>
+        <b>0</b>
+        <small>respostas entregues sem base no material aprovado</small>
+      </div>
+      <div>
+        <b>&lt; 1s</b>
+        <small>para interceptar uma emergência, sem passar pela IA</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="contato" id="contato">
+    <p class="rotulo">Falar com a gente</p>
+    <h2>Conte o que trava hoje no seu atendimento</h2>
+    <p style="color:var(--suave)">
+      Uma conversa de trinta minutos costuma bastar para dizer se faz sentido —
+      e a gente diz quando não faz.
+    </p>
+    <div class="acoes">
+      <a class="botao" href="https://wa.me/55DDDNUMERO">Chamar no WhatsApp</a>
+      <a class="botao vazado" href="mailto:contato@watanabeaitech.com.br">Mandar um e-mail</a>
+    </div>
+  </div>
+
+  <footer>
+    <div class="identidade">
+      <p><strong>Watanabe AI Tech LTDA</strong> · CNPJ 31.797.697/0001-05</p>
+      <p>Agentes de IA e automações para pequenas empresas.</p>
+      <p>
+        <a href="mailto:contato@watanabeaitech.com.br">contato@watanabeaitech.com.br</a>
+      </p>
+    </div>
+    <div class="rodape-baixo">
+      <span>© 2026 Watanabe AI Tech LTDA</span>
+      <span>Feito no Brasil</span>
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>

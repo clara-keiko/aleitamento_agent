@@ -91,19 +91,32 @@ sessão. Sem isso, cada deploy perde o pareamento e pede QR de novo — o sistem
 de arquivos do Render é efêmero. Alternativa: apontar a Evolution para Postgres
 ou Redis, que ela suporta.
 
-### Rodar na sua máquina, em vez do Render
+### Rodar tudo na sua máquina
 
-Para só testar o pareamento, `evolution/docker-compose.yml` sobe tudo local — e
-é mais rápido, porque não há disco efêmero para resolver:
+Mais rápido e mais barato que o Render, e é o caminho recomendado para
+protótipo. `evolution/docker-compose.yml` sobe **Evolution, Postgres, Redis e o
+agente** na mesma rede:
 
 ```bash
 cd evolution
-cp .env.exemplo .env          # e preencha AUTHENTICATION_API_KEY
+cp .env.exemplo .env          # preencha as chaves
 docker compose up -d
+docker compose logs -f agente
 ```
 
-A Evolution fica em `http://localhost:8080`. Com o agente rodando na porta 8000
-do host, o webhook é `http://host.docker.internal:8000/webhook`.
+Como estão na mesma rede do Docker, os dois se acham pelo nome do serviço: o
+agente chama `http://evolution:8080` e a Evolution entrega o webhook em
+`http://agente:10000/webhook`. **Sem túnel, sem IP, sem expor nada na
+internet.**
+
+O agente sobe pelo Dockerfile do projeto, que traz Python 3.11 — a versão do
+Python da sua máquina não entra nessa história.
+
+No host: agente em `http://localhost:8000` (o protótipo web fica em `/chat`) e
+Evolution em `http://localhost:8080`.
+
+Para parear, use `AGENT_WEBHOOK_URL='http://agente:10000/webhook'` — é o
+endereço que a Evolution enxerga, não o seu navegador.
 
 ### Criar a instância e parear
 

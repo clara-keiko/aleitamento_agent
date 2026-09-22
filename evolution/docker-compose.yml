@@ -1,16 +1,20 @@
-# Evolution API para rodar na sua máquina.
-#
-# Serve para testar o pareamento antes de gastar serviço no Render — e é o
-# caminho mais rápido, porque o QR aparece direto e não há disco efêmero para
-# resolver.
+# Evolution API e o agente, na sua máquina.
 #
 #   cd evolution
-#   cp .env.exemplo .env      # e defina AUTHENTICATION_API_KEY
+#   cp .env.exemplo .env      # e preencha as chaves
 #   docker compose up -d
 #
-# O agente precisa alcançar esta Evolution e vice-versa. Rodando os dois na
-# mesma máquina, use http://host.docker.internal:8000/webhook como URL do
-# webhook (o agente na porta 8000 do host).
+# Os dois sobem na mesma rede do Docker, então se enxergam pelo nome do
+# serviço: o agente chama http://evolution:8080, e a Evolution entrega o
+# webhook em http://agente:10000/webhook. Não precisa de túnel, nem de IP, nem
+# de expor nada na internet.
+#
+# O agente roda no Dockerfile do projeto, que já traz Python 3.11 — o Python
+# do seu Mac não entra nessa história.
+#
+# Depois de subir:
+#   docker compose logs -f agente        # os logs do agente
+#   http://localhost:8000/chat           # o protótipo web, no mesmo processo
 #
 # A imagem é a do repositório mantido: atendai/evolution-api parou em
 # fev/2025. Versão fixa de propósito — o `latest` de lá aponta para uma
@@ -21,6 +25,32 @@
 # quê: docker compose logs -f evolution
 
 services:
+  agente:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:10000"
+    environment:
+      WHATSAPP_PROVIDER: evolution
+      # Nome do serviço, não localhost: dentro da rede do Docker cada
+      # contêiner é "localhost" para si mesmo.
+      EVOLUTION_BASE_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${AUTHENTICATION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-lactai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      VECTOR_STORE_ID: ${VECTOR_STORE_ID}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      REASONING_EFFORT: low
+      MAX_OUTPUT_TOKENS: "0"
+      ENABLE_WEB: "true"
+      ENABLE_AUDIO: "true"
+      REQUIRE_SIGNATURE: "true"
+      LOG_LEVEL: INFO
+    depends_on:
+      - evolution
+
   evolution:
     image: docker.io/evoapicloud/evolution-api:v2.3.7
     restart: unless-stopped

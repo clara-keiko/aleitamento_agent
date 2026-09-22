@@ -16,6 +16,8 @@ load_dotenv()
 # Provedores de canal suportados.
 PROVIDER_META = "meta"
 PROVIDER_TWILIO = "twilio"
+# Conexão não oficial (WhatsApp Web). Ver app/channels/evolution.py.
+PROVIDER_EVOLUTION = "evolution"
 
 
 def _env(name: str, default: str = "") -> str:
@@ -56,6 +58,16 @@ class Settings:
     twilio_auth_token: str = field(default_factory=lambda: _env("TWILIO_AUTH_TOKEN"))
     twilio_whatsapp_from: str = field(default_factory=lambda: _env("TWILIO_WHATSAPP_FROM"))
     public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL"))
+
+    # Evolution API (conexão não oficial — ver app/channels/evolution.py)
+    evolution_base_url: str = field(default_factory=lambda: _env("EVOLUTION_BASE_URL"))
+    evolution_api_key: str = field(default_factory=lambda: _env("EVOLUTION_API_KEY"))
+    evolution_instance: str = field(default_factory=lambda: _env("EVOLUTION_INSTANCE"))
+    # Pausa entre balões da mesma resposta. Rajada no mesmo segundo é padrão
+    # de robô, e é o que os detectores procuram.
+    evolution_send_delay_ms: int = field(
+        default_factory=lambda: _env_int("EVOLUTION_SEND_DELAY_MS", 1200)
+    )
 
     # OpenAI
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
@@ -119,7 +131,13 @@ class Settings:
 
     def missing_channel(self) -> list[str]:
         """O que o canal de WhatsApp precisa, além do núcleo."""
-        if self.provider == PROVIDER_TWILIO:
+        if self.provider == PROVIDER_EVOLUTION:
+            required = {
+                "EVOLUTION_BASE_URL": self.evolution_base_url,
+                "EVOLUTION_API_KEY": self.evolution_api_key,
+                "EVOLUTION_INSTANCE": self.evolution_instance,
+            }
+        elif self.provider == PROVIDER_TWILIO:
             required = {
                 "TWILIO_ACCOUNT_SID": self.twilio_account_sid,
                 "TWILIO_AUTH_TOKEN": self.twilio_auth_token,

@@ -1,12 +1,14 @@
 """Seleção do provedor de canal."""
 
 from app.channels.base import Channel, IncomingMessage, split_message
+from app.channels.evolution import EvolutionChannel
 from app.channels.meta_cloud import MetaCloudChannel
 from app.channels.twilio import TwilioChannel
-from app.config import PROVIDER_TWILIO, Settings
+from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, Settings
 
 __all__ = [
     "Channel",
+    "EvolutionChannel",
     "IncomingMessage",
     "MetaCloudChannel",
     "TwilioChannel",
@@ -18,4 +20,6 @@ __all__ = [
 def build_channel(settings: Settings) -> Channel:
     if settings.provider == PROVIDER_TWILIO:
         return TwilioChannel(settings)
+    if settings.provider == PROVIDER_EVOLUTION:
+        return EvolutionChannel(settings)
     return MetaCloudChannel(settings)

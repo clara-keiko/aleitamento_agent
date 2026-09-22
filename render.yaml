@@ -30,6 +30,15 @@ services:
       - key: TWILIO_WHATSAPP_FROM
         sync: false
 
+      # ── Evolution API (não oficial — ver docs/EVOLUTION.md) ─────────
+      # Deixe em branco enquanto WHATSAPP_PROVIDER não for evolution.
+      - key: EVOLUTION_BASE_URL
+        sync: false
+      - key: EVOLUTION_API_KEY
+        sync: false
+      - key: EVOLUTION_INSTANCE
+        sync: false
+
       # ── Meta ────────────────────────────────────────────────────────
       # Deixe em branco enquanto WHATSAPP_PROVIDER for twilio.
       - key: VERIFY_TOKEN

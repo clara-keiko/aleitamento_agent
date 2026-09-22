@@ -41,15 +41,34 @@ promessa comercial na seção "O que não fazemos".
 
 ### Sobre os números
 
-⚠️ **R$ 3.900 / R$ 590 / R$ 2.500 são proposta, não preço validado.** A base de
-cálculo é a infraestrutura medida mais o seu tempo, com a âncora do custo de um
-atendente (R$ 2.000–3.000/mês mais encargos). Antes de mandar proposta de verdade:
+O preço não é limitado pelo custo de operar. Para uma empresa de bairro com ~300
+atendimentos/mês, a infraestrutura inteira sai por **R$ 43/mês**
+([`custos.py --maes 100 --interacoes-por-mae 3`](../scripts/custos.py)). O que
+limita é a **sua hora de implantação**:
 
-- Cronometre quanto custou a implantação do LactAI em horas suas. É o único dado
-  real de esforço que você tem, e ele define se R$ 3.900 é lucro ou prejuízo
-- Confirme o limite de 3.000 atendimentos/mês na mensalidade — pela calculadora
-  cabe com folga, mas confira com o volume que o cliente projeta
-- Teste disposição a pagar antes de fixar. Preço de tabela na página é compromisso
+| Implantação | Horas que ela banca a R$ 100/h |
+|---|---|
+| R$ 3.900 | ~39 h |
+| R$ 1.200 | ~12 h |
+
+Daí os dois níveis. O **Essencial** só fecha a conta se a implantação couber em
+~12 h, o que exige **base pronta por setor** — clínica, salão, oficina, comércio.
+Sem esse trabalho feito antes, vender a R$ 1.200 é fazer 39 horas por 12.
+
+**A consequência prática:** antes de anunciar o Essencial, monte duas ou três
+verticais. Enquanto elas não existirem, venda só o sob medida e use o Essencial
+como sinal de para onde o negócio vai.
+
+⚠️ **Nenhum destes preços foi validado.** Antes de usá-los em proposta:
+
+- Cronometre quantas horas a implantação do LactAI consumiu. É o único dado real
+  de esforço que você tem, e é ele que diz se R$ 3.900 é lucro ou prejuízo
+- Decida o seu valor-hora antes de decidir o preço, não depois
+- R$ 290/mês tem ~R$ 250 de margem sobre infraestrutura. Ela existe para cobrir
+  suporte: duas ligações longas no mês já consomem a margem do cliente inteiro.
+  Por isso o escopo de suporte está escrito na página — "horário comercial",
+  não "ilimitado"
+- Teste disposição a pagar. Preço de tabela publicado é compromisso
 
 ## Decisões de design
 

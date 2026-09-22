@@ -174,6 +174,24 @@ section{padding-block:3.5rem; border-bottom:1px solid var(--traco)}
   border-left:2px solid var(--acento); font-size:.95rem; border-radius:0 3px 3px 0;
 }
 
+/* tabela de faixas — o único lugar da página com dado tabular */
+.tabela-rolagem{overflow-x:auto}
+.faixas{border-collapse:collapse; width:100%; min-width:34rem; font-size:.95rem}
+.faixas th{
+  text-align:left; font-family:"IBM Plex Mono",monospace; font-weight:500;
+  font-size:.72rem; text-transform:uppercase; letter-spacing:.12em;
+  color:var(--suave); padding:0 1rem .7rem 0;
+  border-bottom:1px solid var(--traco-forte);
+}
+.faixas td{padding:.95rem 1rem .95rem 0; border-bottom:1px solid var(--traco); vertical-align:baseline}
+.faixas tr:last-child td{border-bottom:0}
+.faixas td b{font-family:Archivo,sans-serif; font-weight:600; display:block}
+.faixas td small{display:block; color:var(--suave); font-size:.82rem; margin-top:.15rem}
+.faixas .valor{font-size:1.15rem; font-weight:500; color:var(--acento); white-space:nowrap}
+.faixas .grifada td{background:var(--acento-claro)}
+.faixas .grifada td:first-child{box-shadow:inset 2px 0 0 var(--acento)}
+.faixas .grifada td:first-child{padding-left:.9rem}
+
 /* limites */
 .limites{display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1.5rem 2.5rem}
 .limite{display:grid; gap:.4rem; padding-top:1rem; border-top:2px solid var(--sinal)}
@@ -398,41 +416,77 @@ a:focus-visible,.botao:focus-visible{outline:2px solid var(--acento); outline-of
   <section id="precos">
     <div class="cabeca">
       <p class="rotulo">Preços</p>
-      <h2>Implantação uma vez, operação por mês</h2>
+      <h2>Implantação uma vez, mensalidade pelo tamanho do seu movimento</h2>
       <p>
-        Sem surpresa no meio do caminho. O que muda o valor da implantação é o
-        tamanho do material e quantas integrações o agente precisa ter.
+        Cobramos por <strong>atendimento</strong> — uma conversa, um cliente
+        resolvido — e não por mensagem. Se o agente resolve em três mensagens em
+        vez de dez, o mérito é dele e a conta é a mesma. Faixa fechada: você sabe
+        o valor da fatura antes de ela chegar.
       </p>
     </div>
 
+    <p class="rotulo" style="margin-bottom:.9rem">Mensalidade · pelo volume</p>
+    <div class="tabela-rolagem">
+      <table class="faixas">
+        <thead>
+          <tr><th>Plano</th><th>Atendimentos/mês</th><th>Mensalidade</th><th>Suporte</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Balcão</b><small>para quem está começando</small></td>
+            <td class="dado">até 100</td>
+            <td class="dado valor">R$ 129</td>
+            <td>Por mensagem, resposta em 1 dia útil</td>
+          </tr>
+          <tr class="grifada">
+            <td><b>Bairro</b><small>mais procurado</small></td>
+            <td class="dado">até 500</td>
+            <td class="dado valor">R$ 190</td>
+            <td>Por mensagem, em horário comercial</td>
+          </tr>
+          <tr>
+            <td><b>Movimento</b><small>quem atende o dia inteiro</small></td>
+            <td class="dado">até 2.000</td>
+            <td class="dado valor">R$ 390</td>
+            <td>Horário comercial, com ligação quando precisar</td>
+          </tr>
+          <tr>
+            <td><b>Operação</b><small>várias unidades ou e-commerce</small></td>
+            <td class="dado">até 5.000</td>
+            <td class="dado valor">R$ 690</td>
+            <td>Horário comercial, com acompanhamento mensal</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color:var(--suave); font-size:.9rem; margin-top:.9rem">
+      Passou da faixa no mês? Avisamos antes e você decide se sobe de plano —
+      nunca cobramos excedente sem combinar. Acima de 5.000, falamos.
+    </p>
+
+    <p class="rotulo" style="margin:2.75rem 0 .9rem">Implantação · uma vez</p>
     <div class="planos">
       <div class="plano destaque">
-        <p class="rotulo">Essencial · mais procurado</p>
-        <p class="preco">R$ 290 <small>/mês</small></p>
-        <p style="color:var(--suave); font-size:.94rem">
-          Mais <strong>R$ 1.200</strong> de implantação, uma vez. No ar em uma semana.
-        </p>
+        <p class="rotulo">Base pronta do seu setor</p>
+        <p class="preco">R$ 1.200</p>
+        <p style="color:var(--suave); font-size:.94rem">No ar em uma semana.</p>
         <ul>
-          <li>Montado sobre uma base pronta do seu setor</li>
+          <li>Clínica, salão, oficina e comércio de bairro</li>
           <li>Ajustada com o seu cardápio, tabela ou catálogo</li>
           <li>Encaminhamento para o seu time quando sai do script</li>
           <li>Número e homologação na Meta por nossa conta</li>
-          <li>Até 1.000 atendimentos por mês inclusos</li>
         </ul>
       </div>
 
       <div class="plano">
         <p class="rotulo">Sob medida</p>
-        <p class="preco">R$ 590 <small>/mês</small></p>
-        <p style="color:var(--suave); font-size:.94rem">
-          Mais <strong>R$ 3.900</strong> de implantação. Quatro semanas.
-        </p>
+        <p class="preco">R$ 3.900</p>
+        <p style="color:var(--suave); font-size:.94rem">Quatro semanas.</p>
         <ul>
           <li>Base construída do zero com o seu material</li>
           <li>Integração com o sistema que você já usa</li>
           <li>Relatório de medição, com você aprovando resposta por resposta</li>
           <li>Regras próprias de escalonamento</li>
-          <li>Até 3.000 atendimentos por mês inclusos</li>
         </ul>
       </div>
 
@@ -449,18 +503,20 @@ a:focus-visible,.botao:focus-visible{outline:2px solid var(--acento); outline-of
     </div>
 
     <p class="nota-preco">
-      <strong>Por que o Essencial custa menos:</strong> não é uma versão reduzida.
-      Já temos a estrutura pronta para clínica, salão, oficina e comércio de
-      bairro — então a implantação leva dias em vez de semanas, e o desconto é
-      desse tempo. O agente que atende o seu cliente é o mesmo.
+      <strong>Por que a base pronta custa menos:</strong> não é uma versão
+      reduzida. Já temos a estrutura montada para os setores acima, então a
+      implantação leva dias em vez de semanas — e o desconto é desse tempo. O
+      agente que atende o seu cliente é o mesmo.
     </p>
 
     <p class="nota-preco" style="background:transparent; border-left-color:var(--traco-forte)">
-      <strong>Para comparar:</strong> um atendente custa entre R$ 2.000 e R$ 3.000
-      por mês, mais encargos, e atende oito horas por dia. O Essencial sai por
-      cerca de um décimo disso e atende as vinte e quatro — com o seu time
-      cuidando só do que é difícil, que é onde uma pessoa faz diferença.
+      <strong>Para comparar:</strong> um atendente custa entre R$ 2.000 e
+      R$ 3.000 por mês, mais encargos, e atende oito horas por dia. O plano
+      Balcão sai por menos de um décimo disso e atende as vinte e quatro — com
+      o seu time cuidando só do que é difícil, que é onde uma pessoa faz
+      diferença.
     </p>
+
   </section>
 
   <section id="limites">

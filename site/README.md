@@ -21,8 +21,9 @@ python3 -m http.server 8080 --directory site
 
 ## O modelo de negócio, e de onde ele saiu
 
-A estrutura é **implantação uma vez + mensalidade de operação**. Ela vem de três
-constatações medidas no projeto do LactAI, não de comparação com concorrente:
+A estrutura tem **dois eixos independentes**: implantação uma vez (define o tipo de
+trabalho) e mensalidade por faixa de volume (define o tamanho do cliente). Ela vem de
+três constatações medidas no projeto do LactAI, não de comparação com concorrente:
 
 **A burocracia é a barreira, e é ela que se vende.** Colocar um agente no ar exigiu
 verificação de CNPJ na Meta, aprovação de nome de exibição, portfólio empresarial,
@@ -38,6 +39,35 @@ está no tempo de gente.
 herda a suspensão, a reclamação de spam e o KYC de cada cliente, para sempre. Com a
 conta no CNPJ dele e você como administradora, o risco fica onde deve — e isso virou
 promessa comercial na seção "O que não fazemos".
+
+### Por que atendimento, e não mensagem
+
+Cobrar por mensagem parece justo e tem um defeito estrutural: **um agente bom
+resolve em três mensagens o que um ruim resolve em dez**. Cobrando por mensagem,
+a receita sobe quando a qualidade cai — o oposto do que a página inteira vende.
+
+Atendimento (uma conversa, um cliente resolvido) é a unidade de valor e não muda
+com a eficiência do agente. Faixa fechada em vez de medição por unidade porque dono
+de negócio pequeno tolera preço alto muito melhor do que tolera fatura variável.
+
+A infraestrutura, medida com `custos.py`, é quase plana — o volume sobe 10× e o
+custo 2,7×, porque hospedagem domina:
+
+| Atendimentos/mês | Infra | Preço | Margem |
+|---|---|---|---|
+| 100 | R$ 40 | R$ 129 | R$ 89 |
+| 500 | R$ 46 | R$ 190 | R$ 144 |
+| 2.000 | R$ 72 | R$ 390 | R$ 318 |
+| 5.000 | R$ 124 | R$ 690 | R$ 566 |
+
+Ou seja: as faixas **não** são preço por custo. São preço por valor, com o custo
+apenas definindo o piso.
+
+⚠️ **O plano Balcão é o mais arriscado dos quatro.** R$ 89 de margem é uma ligação
+de meia hora. Ele só se sustenta com suporte assíncrono — por isso a tabela promete
+"resposta em 1 dia útil" nessa faixa e não menciona telefone. Se na prática o
+cliente de R$ 129 ligar toda semana, o plano está errado e é para subir o preço,
+não para engolir.
 
 ### Sobre os números
 

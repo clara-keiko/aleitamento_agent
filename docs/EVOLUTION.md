@@ -84,41 +84,48 @@ sessão. Sem isso, cada deploy perde o pareamento e pede QR de novo — o sistem
 de arquivos do Render é efêmero. Alternativa: apontar a Evolution para Postgres
 ou Redis, que ela suporta.
 
-### Criar a instância e parear
+### Rodar na sua máquina, em vez do Render
+
+Para só testar o pareamento, `evolution/docker-compose.yml` sobe tudo local — e
+é mais rápido, porque não há disco efêmero para resolver:
 
 ```bash
-EVO='https://sua-evolution.onrender.com'
-CHAVE='a-chave-que-voce-gerou'
-
-# cria a instância já apontando o webhook para o agente
-curl -s -X POST "$EVO/instance/create" \
-  -H "apikey: $CHAVE" -H 'Content-Type: application/json' \
-  -d '{
-    "instanceName": "lactai",
-    "qrcode": true,
-    "integration": "WHATSAPP-BAILEYS",
-    "webhook": {
-      "url": "https://SEU-APP.onrender.com/webhook",
-      "byEvents": false,
-      "events": ["MESSAGES_UPSERT"]
-    }
-  }' | python3 -m json.tool
+cd evolution
+cp .env.exemplo .env          # e preencha AUTHENTICATION_API_KEY
+docker compose up -d
 ```
 
-A resposta traz o QR em base64. Para abrir:
+A Evolution fica em `http://localhost:8080`. Com o agente rodando na porta 8000
+do host, o webhook é `http://host.docker.internal:8000/webhook`.
+
+### Criar a instância e parear
+
+`scripts/evolution_setup.py` faz os passos na ordem certa — instância, webhook,
+QR — e mostra o estado entre eles:
 
 ```bash
-curl -s "$EVO/instance/connect/lactai" -H "apikey: $CHAVE" \
-  | python3 -c "import sys,json,base64,pathlib; d=json.load(sys.stdin); \
-b=d.get('base64','').split(',')[-1]; pathlib.Path('qr.png').write_bytes(base64.b64decode(b)); print('qr.png')"
-open qr.png
+export EVOLUTION_BASE_URL='https://sua-evolution.onrender.com'
+export EVOLUTION_API_KEY='a-chave-que-voce-gerou'
+export EVOLUTION_INSTANCE='lactai'
+export AGENT_WEBHOOK_URL='https://SEU-APP.onrender.com/webhook'
+
+python3 scripts/evolution_setup.py criar
+python3 scripts/evolution_setup.py qr       # salva e abre qr.png
 ```
 
 No celular do **segundo número**: WhatsApp → Aparelhos conectados → Conectar um
-aparelho → aponte para o QR.
+aparelho → aponte para o QR. Ele expira em cerca de um minuto; rode `qr` de novo
+se demorar.
 
-Confirme: `curl -s "$EVO/instance/connectionState/lactai" -H "apikey: $CHAVE"`
-deve dizer `open`.
+```bash
+python3 scripts/evolution_setup.py estado   # tem que dizer "open"
+python3 scripts/evolution_setup.py testar 5521SEUCELULAR
+```
+
+O `testar` manda uma mensagem sem envolver o agente. Se ela chegar, o envio
+está resolvido e o que resta é só apontar o agente para a instância — o que
+separa "a Evolution funciona" de "o meu código funciona", em vez de depurar os
+dois de uma vez.
 
 ### Apontar o agente
 

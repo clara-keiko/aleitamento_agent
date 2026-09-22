@@ -1,0 +1,61 @@
+# Evolution API para rodar na sua máquina.
+#
+# Serve para testar o pareamento antes de gastar serviço no Render — e é o
+# caminho mais rápido, porque o QR aparece direto e não há disco efêmero para
+# resolver.
+#
+#   cd evolution
+#   cp .env.exemplo .env      # e defina AUTHENTICATION_API_KEY
+#   docker compose up -d
+#
+# O agente precisa alcançar esta Evolution e vice-versa. Rodando os dois na
+# mesma máquina, use http://host.docker.internal:8000/webhook como URL do
+# webhook (o agente na porta 8000 do host).
+#
+# ⚠️ Nomes de imagem e variáveis vêm do que se conhece da v2 e não foram
+# conferidos contra a documentação corrente. Se algo divergir, o log do
+# contêiner diz o quê: docker compose logs -f evolution
+
+services:
+  evolution:
+    image: atendai/evolution-api:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # A senha do serviço. O agente manda esta chave ao enviar, e confere
+      # esta mesma chave no header dos webhooks que chegam.
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/0
+      CACHE_LOCAL_ENABLED: "false"
+    volumes:
+      # A sessão do pareamento mora aqui. Perder este volume = novo QR.
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - evolution_redis:/data
+
+volumes:
+  evolution_instances:
+  evolution_postgres:
+  evolution_redis:

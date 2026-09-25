@@ -519,7 +519,17 @@ def main() -> int:
     )
     analisador.add_argument("--json", action="store_true",
                             help="imprime a resposta crua da Meta")
-    sub = analisador.add_subparsers(dest="comando", required=True)
+
+    # --json aceito antes ou depois do subcomando. Exigir uma ordem só é a
+    # classe de atrito que faz alguém parar no meio de uma operação para
+    # depurar a linha de comando em vez do problema real.
+    herdado = argparse.ArgumentParser(add_help=False)
+    herdado.add_argument("--json", action="store_true",
+                         help="imprime a resposta crua da Meta")
+
+    sub = analisador.add_subparsers(dest="comando", required=True,
+                                    parser_class=lambda **kw: argparse.ArgumentParser(
+                                        parents=[herdado], **kw))
 
     sub.add_parser("descobrir",
                    help="descobre IDs e imprime o link direto de cada tela")

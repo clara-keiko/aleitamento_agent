@@ -180,6 +180,23 @@ def verify_webhook(
     return PlainTextResponse("Forbidden", status_code=403)
 
 
+def _assinaturas_presentes(headers: dict) -> str:
+    """Diz *qual* provedor assinou, não só que veio assinatura.
+
+    Um webhook da Twilio chegando num app em modo Meta é indistinguível de
+    uma credencial errada, se o log só disser que havia algum header. Nomear
+    o header separa "configurei a credencial errada" de "este webhook é de
+    outro provedor" — dois problemas com correções opostas.
+    """
+    conhecidos = {
+        "x-hub-signature-256": "meta",
+        "x-twilio-signature": "twilio",
+        "apikey": "evolution",
+    }
+    achados = [rotulo for header, rotulo in conhecidos.items() if headers.get(header)]
+    return ",".join(achados)
+
+
 def _impressao_da_credencial() -> str:
     """Identifica *qual* segredo está em uso, sem revelá-lo.
 
@@ -221,10 +238,10 @@ async def receive_webhook(request: Request, background: BackgroundTasks) -> Resp
         # opostas. Sem esses dados, depurar vira tentativa e erro.
         log.warning(
             "assinatura inválida no webhook; descartando "
-            "(url_conferida=%s origem_da_url=%s header_presente=%s credencial=%s)",
+            "(url_conferida=%s origem_da_url=%s assinaturas=%s credencial=%s)",
             signed_url,
             "PUBLIC_BASE_URL" if settings.public_base_url else "request.url",
-            bool(headers.get("x-twilio-signature") or headers.get("x-hub-signature-256")),
+            _assinaturas_presentes(headers) or "nenhuma",
             _impressao_da_credencial(),
         )
         return JSONResponse({"status": "forbidden"}, status_code=403)

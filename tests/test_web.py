@@ -271,3 +271,69 @@ class TestWebChannel:
         assert canal.parse_webhook({"session": "s"}) == []
         assert canal.parse_webhook({"text": "oi"}) == []
         assert canal.parse_webhook({"session": " ", "text": " "}) == []
+
+
+class TestPoliticaDePrivacidade:
+    """A Meta exige URL pública para publicar o app — e um aviso de
+    privacidade atrás de senha não cumpre o papel de aviso."""
+
+    @pytest.fixture
+    def protegido(self, monkeypatch):
+        for nome, valor in [
+            ("APP_SECRET", "s"), ("VERIFY_TOKEN", "v"), ("WHATSAPP_TOKEN", "t"),
+            ("PHONE_NUMBER_ID", "1"), ("OPENAI_API_KEY", "k"),
+            ("VECTOR_STORE_ID", "vs"), ("WEB_ACCESS_CODE", "segredo123"),
+        ]:
+            monkeypatch.setenv(nome, valor)
+
+        import app.config
+
+        importlib.reload(app.config)
+        import main
+
+        importlib.reload(main)
+        with TestClient(main.app) as c:
+            yield c
+
+    def test_pagina_publica(self, client):
+        resposta = client.get("/privacidade")
+        assert resposta.status_code == 200
+        assert "Política de Privacidade" in resposta.text
+
+    def test_declara_controlador_e_cnpj(self, client):
+        texto = client.get("/privacidade").text
+        assert "Watanabe AI Tech LTDA" in texto
+        assert "31.797.697/0001-05" in texto
+
+    def test_explica_como_apagar_os_dados(self, client):
+        """Opt-out é direito da titular e tem que estar escrito."""
+        texto = client.get("/privacidade").text
+        assert "SAIR" in texto
+
+    def test_nomeia_os_operadores(self, client):
+        texto = client.get("/privacidade").text
+        assert "OpenAI" in texto
+        assert "Meta" in texto
+
+    def test_aberta_mesmo_com_codigo_de_acesso(self, protegido):
+        """Se cair atrás do código, o revisor da Meta não consegue ler —
+        e o app não é publicado."""
+        assert protegido.get("/privacidade").status_code == 200
+
+    def test_aberta_com_o_chat_desligado(self, monkeypatch):
+        """ENABLE_WEB desliga o protótipo; o aviso de privacidade continua
+        valendo, porque o serviço segue tratando dados pelo WhatsApp."""
+        monkeypatch.setenv("ENABLE_WEB", "false")
+        monkeypatch.setenv("OPENAI_API_KEY", "k")
+        monkeypatch.setenv("VECTOR_STORE_ID", "vs")
+
+        import app.config
+
+        importlib.reload(app.config)
+        import main
+
+        importlib.reload(main)
+
+        with TestClient(main.app) as c:
+            assert c.get("/chat").status_code == 404
+            assert c.get("/privacidade").status_code == 200

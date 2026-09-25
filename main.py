@@ -40,6 +40,7 @@ web_channel = WebChannel()
 web_pipeline = MessagePipeline(settings, web_channel, engine)
 
 CHAT_HTML = Path(__file__).parent / "app" / "static" / "chat.html"
+PRIVACIDADE_HTML = Path(__file__).parent / "app" / "static" / "privacidade.html"
 
 if not settings.ready:
     # Avisa alto, mas deixa o processo de pé: sem isso a plataforma reinicia
@@ -103,6 +104,17 @@ def chat_ui() -> Response:
     if not settings.enable_web:
         return PlainTextResponse("Not Found", status_code=404)
     return HTMLResponse(CHAT_HTML.read_text(encoding="utf-8"))
+
+
+@app.get("/privacidade", response_class=HTMLResponse)
+def privacidade() -> Response:
+    """Política de privacidade, sempre pública.
+
+    Não depende de ENABLE_WEB nem de código de acesso: a Meta exige uma URL
+    aberta para publicar o aplicativo, e um aviso de privacidade que só
+    aparece para quem tem senha não cumpre o papel de aviso.
+    """
+    return HTMLResponse(PRIVACIDADE_HTML.read_text(encoding="utf-8"))
 
 
 def _web_access_allowed(headers: dict) -> bool:

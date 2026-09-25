@@ -10,15 +10,19 @@ Roda com a biblioteca padrão do Python 3.9+ — nada de `pip install`. É para 
 usado no seu Mac, não no servidor.
 
     export META_TOKEN='EAA...'           # System User, permissão de business
-    export PHONE_NUMBER_ID='1303115646210874'
-    export WABA_ID='...'                 # opcional
-    export BUSINESS_ID='...'             # opcional, para os comandos de domínio
+    export PHONE_NUMBER_ID='...'
+    export WABA_ID='...'                 # conta comercial
+    export META_APP_ID='...'             # para os comandos de webhook
+    export META_APP_SECRET='...'         # idem
+    export VERIFY_TOKEN='...'            # o mesmo do painel do agente
+    export BUSINESS_ID='...'             # para os comandos de domínio
 
+    python3 scripts/meta_admin.py descobrir
     python3 scripts/meta_admin.py status
-    python3 scripts/meta_admin.py nome "LactAI"           # só simula
+    python3 scripts/meta_admin.py webhook --url https://seu-app/webhook
+    python3 scripts/meta_admin.py assinar-waba
+    python3 scripts/meta_admin.py webhook-status
     python3 scripts/meta_admin.py nome "LactAI" --confirmar
-    python3 scripts/meta_admin.py dominios
-    python3 scripts/meta_admin.py dominio-add aleitamento.com.br
 
 ⚠️ O campo *Site* do portfólio (Informações da empresa) provavelmente não é
 gravável pela Graph API — até onde sei, só pela UI. É um campo de texto só,
@@ -56,8 +60,19 @@ class ErroDaMeta(Exception):
     """Erro devolvido pela Graph API, já legível."""
 
 
-def _requisitar(metodo: str, caminho: str, params: dict | None = None) -> dict:
-    token = os.environ.get("META_TOKEN", "").strip()
+def _token_do_app() -> str:
+    """Token de aplicativo, no formato `{app_id}|{app_secret}`.
+
+    As assinaturas de webhook pertencem ao *aplicativo*, não à conta comercial,
+    e só aceitam esta credencial — o token de System User é recusado nelas com
+    uma mensagem que não explica o motivo.
+    """
+    return f"{_exigir('META_APP_ID')}|{_exigir('META_APP_SECRET')}"
+
+
+def _requisitar(metodo: str, caminho: str, params: dict | None = None,
+                token: str | None = None) -> dict:
+    token = (token or os.environ.get("META_TOKEN", "")).strip()
     if not token:
         sys.exit("Falta META_TOKEN no ambiente. Veja o cabeçalho deste arquivo.")
 
@@ -282,6 +297,114 @@ def cmd_descobrir(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_webhook(args: argparse.Namespace) -> int:
+    """Registra a URL do webhook no aplicativo e assina o campo `messages`.
+
+    É o passo que a documentação trata como dois cliques e que, no painel,
+    fica em telas separadas — registrar a URL e assinar o campo. Assinar é o
+    que todo mundo esquece: sem isso o webhook aparece verificado e nenhuma
+    mensagem chega.
+    """
+    app_id = _exigir("META_APP_ID")
+    verify = _exigir("VERIFY_TOKEN")
+
+    if not args.url.startswith("https://"):
+        sys.exit("A Meta só aceita callback em https.")
+
+    try:
+        resposta = _requisitar(
+            "POST",
+            f"{app_id}/subscriptions",
+            {
+                "object": "whatsapp_business_account",
+                "callback_url": args.url,
+                "verify_token": verify,
+                "fields": "messages",
+            },
+            token=_token_do_app(),
+        )
+    except ErroDaMeta as erro:
+        print(erro)
+        print("\nA Meta chama sua URL antes de aceitar. Se falhar aqui, confira:")
+        print(f"  curl '{args.url}?hub.mode=subscribe"
+              f"&hub.verify_token={verify}&hub.challenge=12345'")
+        print("  → tem que devolver exatamente 12345, com HTTP 200.")
+        return 1
+
+    print(json.dumps(resposta, indent=2, ensure_ascii=False))
+    print("\nWebhook registrado. Agora ligue a conta ao app:")
+    print("  python3 scripts/meta_admin.py assinar-waba")
+    return 0
+
+
+def cmd_webhook_status(args: argparse.Namespace) -> int:
+    app_id = _exigir("META_APP_ID")
+    try:
+        dados = _requisitar("GET", f"{app_id}/subscriptions", token=_token_do_app())
+    except ErroDaMeta as erro:
+        print(erro)
+        return 1
+
+    if args.json:
+        print(json.dumps(dados, indent=2, ensure_ascii=False))
+        return 0
+
+    assinaturas = dados.get("data", [])
+    if not assinaturas:
+        print("Nenhum webhook registrado neste app.")
+        return 0
+
+    _titulo("Webhooks do aplicativo")
+    for item in assinaturas:
+        print(f"  objeto  {item.get('object')}")
+        print(f"  url     {item.get('callback_url')}")
+        print(f"  ativo   {item.get('active')}")
+        campos = [c.get("name") for c in item.get("fields", [])]
+        print(f"  campos  {', '.join(campos) or '—'}")
+        if "messages" not in campos:
+            print("          ⚠️  falta o campo `messages` — nenhuma mensagem chega")
+    return 0
+
+
+def cmd_assinar_waba(args: argparse.Namespace) -> int:
+    """Liga a conta comercial ao aplicativo.
+
+    Registrar o webhook diz *para onde* mandar; isto diz *quais* mensagens.
+    Faltando este passo, a configuração parece completa e nada acontece.
+    """
+    waba = _exigir("WABA_ID")
+    try:
+        resposta = _requisitar("POST", f"{waba}/subscribed_apps")
+    except ErroDaMeta as erro:
+        print(erro)
+        return 1
+
+    print(json.dumps(resposta, indent=2, ensure_ascii=False))
+    print("\nConfira com: python3 scripts/meta_admin.py apps-da-waba")
+    return 0
+
+
+def cmd_apps_da_waba(args: argparse.Namespace) -> int:
+    waba = _exigir("WABA_ID")
+    try:
+        dados = _requisitar("GET", f"{waba}/subscribed_apps")
+    except ErroDaMeta as erro:
+        print(erro)
+        return 1
+
+    apps = dados.get("data", [])
+    _titulo("Aplicativos assinados nesta conta")
+    if not apps:
+        print("  nenhum — as mensagens não vão sair daqui.")
+        print("  → python3 scripts/meta_admin.py assinar-waba")
+        return 1
+
+    for app in apps:
+        detalhe = app.get("whatsapp_business_api_data", app)
+        print(f"  {detalhe.get('name', '?')}  (id {detalhe.get('id', '?')})")
+    return 0
+
+
 PERFIL = "whatsapp_business_profile"
 CAMPOS_DO_PERFIL = "about,address,description,email,vertical,websites"
 
@@ -408,6 +531,14 @@ def main() -> int:
     p_nome.add_argument("--confirmar", action="store_true",
                         help="envia de verdade (sem isso, só simula)")
 
+    p_webhook = sub.add_parser("webhook", help="registra a URL do webhook no app")
+    p_webhook.add_argument("--url", required=True,
+                           help="https://SEU-APP.onrender.com/webhook")
+
+    sub.add_parser("webhook-status", help="mostra o webhook e os campos assinados")
+    sub.add_parser("assinar-waba", help="liga a conta comercial ao aplicativo")
+    sub.add_parser("apps-da-waba", help="lista os apps assinados na conta")
+
     sub.add_parser("perfil", help="mostra o perfil comercial do número")
 
     p_site = sub.add_parser("perfil-site", help="grava o site do perfil comercial")
@@ -431,6 +562,10 @@ def main() -> int:
         "descobrir": cmd_descobrir,
         "status": cmd_status,
         "nome": cmd_nome,
+        "webhook": cmd_webhook,
+        "webhook-status": cmd_webhook_status,
+        "assinar-waba": cmd_assinar_waba,
+        "apps-da-waba": cmd_apps_da_waba,
         "perfil": cmd_perfil,
         "perfil-site": cmd_perfil_site,
         "dominios": cmd_dominios,

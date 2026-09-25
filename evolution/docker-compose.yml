@@ -1,0 +1,95 @@
+# Evolution API e o agente, na sua máquina.
+#
+#   cd evolution
+#   cp .env.exemplo .env      # e preencha as chaves
+#   docker compose up -d
+#
+# Os dois sobem na mesma rede do Docker, então se enxergam pelo nome do
+# serviço: o agente chama http://evolution:8080, e a Evolution entrega o
+# webhook em http://agente:10000/webhook. Não precisa de túnel, nem de IP, nem
+# de expor nada na internet.
+#
+# O agente roda no Dockerfile do projeto, que já traz Python 3.11 — o Python
+# do seu Mac não entra nessa história.
+#
+# Depois de subir:
+#   docker compose logs -f agente        # os logs do agente
+#   http://localhost:8000/chat           # o protótipo web, no mesmo processo
+#
+# A imagem é a do repositório mantido: atendai/evolution-api parou em
+# fev/2025. Versão fixa de propósito — o `latest` de lá aponta para uma
+# candidata a versão, que não é onde se pareia um número em uso.
+#
+# ⚠️ As variáveis abaixo vêm do que se conhece da v2 e não foram conferidas
+# contra a documentação corrente. Se algo divergir, o log do contêiner diz o
+# quê: docker compose logs -f evolution
+
+services:
+  agente:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:10000"
+    environment:
+      WHATSAPP_PROVIDER: evolution
+      # Nome do serviço, não localhost: dentro da rede do Docker cada
+      # contêiner é "localhost" para si mesmo.
+      EVOLUTION_BASE_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${AUTHENTICATION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-lactai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      VECTOR_STORE_ID: ${VECTOR_STORE_ID}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      REASONING_EFFORT: low
+      MAX_OUTPUT_TOKENS: "0"
+      ENABLE_WEB: "true"
+      ENABLE_AUDIO: "true"
+      REQUIRE_SIGNATURE: "true"
+      LOG_LEVEL: INFO
+    depends_on:
+      - evolution
+
+  evolution:
+    image: docker.io/evoapicloud/evolution-api:v2.3.7
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # A senha do serviço. O agente manda esta chave ao enviar, e confere
+      # esta mesma chave no header dos webhooks que chegam.
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/0
+      CACHE_LOCAL_ENABLED: "false"
+    volumes:
+      # A sessão do pareamento mora aqui. Perder este volume = novo QR.
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+      POSTGRES_DB: evolution
+    volumes:
+      - evolution_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - evolution_redis:/data
+
+volumes:
+  evolution_instances:
+  evolution_postgres:
+  evolution_redis:

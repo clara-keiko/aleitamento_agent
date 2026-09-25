@@ -2,16 +2,79 @@ services:
   - type: web
     name: aleitamento-agent
     runtime: python
+    # O plano free hiberna após 15 min: o primeiro webhook depois da pausa
+    # espera ~1 min de cold start e a Meta reentrega o evento nesse meio-tempo.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      # twilio (piloto) ou meta (escala). A conta em scripts/custos.py mostra
+      # por que: BSP é barato em volume baixo e caro em volume alto.
+      - key: WHATSAPP_PROVIDER
+        value: twilio
+
+      # A Twilio assina a URL pública. Atrás do proxy do Render, request.url
+      # chega como http:// interno e a assinatura nunca bate. Sem isto, todo
+      # webhook vira 403 — e o log só diz "assinatura inválida".
+      # Preencha com https://SEU-APP.onrender.com depois do primeiro deploy.
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # ── Twilio ──────────────────────────────────────────────────────
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      # Sandbox: whatsapp:+14155238886
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+
+      # ── Evolution API (não oficial — ver docs/EVOLUTION.md) ─────────
+      # Deixe em branco enquanto WHATSAPP_PROVIDER não for evolution.
+      - key: EVOLUTION_BASE_URL
+        sync: false
+      - key: EVOLUTION_API_KEY
+        sync: false
+      - key: EVOLUTION_INSTANCE
+        sync: false
+
+      # ── Meta ────────────────────────────────────────────────────────
+      # Deixe em branco enquanto WHATSAPP_PROVIDER for twilio.
       - key: VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_TOKEN
         sync: false
       - key: PHONE_NUMBER_ID
         sync: false
+      - key: APP_SECRET
+        sync: false
+
       - key: OPENAI_API_KEY
         sync: false
       - key: VECTOR_STORE_ID
         sync: false
+      - key: PSEUDONYM_KEY
+        generateValue: true
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      # gpt-5-mini raciocina antes de responder; esforço baixo mantém a
+      # latência aceitável no WhatsApp.
+      - key: REASONING_EFFORT
+        value: low
+      # 0 = o código escolhe o teto conforme o modelo. Ver .env.example.
+      - key: MAX_OUTPUT_TOKENS
+        value: "0"
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "45"
+      - key: MAX_RETRIEVAL_RESULTS
+        value: "8"
+      - key: ENABLE_WEB
+        value: "true"
+      # Defina no painel antes de compartilhar o link do protótipo.
+      - key: WEB_ACCESS_CODE
+        sync: false
+      - key: ENABLE_AUDIO
+        value: "true"
+      - key: REQUIRE_SIGNATURE
+        value: "true"

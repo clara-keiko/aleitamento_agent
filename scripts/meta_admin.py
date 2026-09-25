@@ -297,6 +297,42 @@ def cmd_descobrir(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_registrar(args: argparse.Namespace) -> int:
+    """Registra o número na Cloud API.
+
+    `code_verification_status: VERIFIED` diz que o número foi verificado, não
+    que ele está ativo para receber — são coisas diferentes, e a segunda se
+    perde quando outro provedor solta o número. O sintoma é silêncio: webhook
+    configurado, conta assinada, e nenhuma mensagem chega.
+
+    O PIN é o da verificação em duas etapas. Se nunca houve uma, este comando
+    define. Se houve, tem que ser o mesmo — e a Meta responde 'incorrect PIN'
+    sem dizer qual era.
+    """
+    numero = _exigir("PHONE_NUMBER_ID")
+
+    if not (args.pin.isdigit() and len(args.pin) == 6):
+        sys.exit("O PIN tem exatamente 6 dígitos.")
+
+    try:
+        resposta = _requisitar(
+            "POST",
+            f"{numero}/register",
+            {"messaging_product": "whatsapp", "pin": args.pin},
+        )
+    except ErroDaMeta as erro:
+        print(erro)
+        print("\nSe disser que o PIN está incorreto, é porque a verificação em")
+        print("duas etapas já existe com outro valor. No WhatsApp Manager dá")
+        print("para desativá-la e tentar de novo.")
+        return 1
+
+    print(json.dumps(resposta, indent=2, ensure_ascii=False))
+    print("\nGuarde este PIN — ele é pedido de novo em qualquer novo registro.")
+    print("Confira com: python3 scripts/meta_admin.py --json status")
+    return 0
+
+
 def cmd_webhook(args: argparse.Namespace) -> int:
     """Registra a URL do webhook no aplicativo e assina o campo `messages`.
 
@@ -541,6 +577,9 @@ def main() -> int:
     p_nome.add_argument("--confirmar", action="store_true",
                         help="envia de verdade (sem isso, só simula)")
 
+    p_reg = sub.add_parser("registrar", help="ativa o número na Cloud API")
+    p_reg.add_argument("--pin", required=True, help="6 dígitos da verificação em duas etapas")
+
     p_webhook = sub.add_parser("webhook", help="registra a URL do webhook no app")
     p_webhook.add_argument("--url", required=True,
                            help="https://SEU-APP.onrender.com/webhook")
@@ -572,6 +611,7 @@ def main() -> int:
         "descobrir": cmd_descobrir,
         "status": cmd_status,
         "nome": cmd_nome,
+        "registrar": cmd_registrar,
         "webhook": cmd_webhook,
         "webhook-status": cmd_webhook_status,
         "assinar-waba": cmd_assinar_waba,

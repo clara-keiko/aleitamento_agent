@@ -110,6 +110,11 @@ class Settings:
         default_factory=lambda: _env_int("RATE_LIMIT_WINDOW_SECONDS", 600)
     )
     max_audio_seconds: int = field(default_factory=lambda: _env_int("MAX_AUDIO_SECONDS", 120))
+    # Se preenchida (números separados por vírgula), o agente só responde a
+    # estes remetentes e ignora os outros em silêncio. Vazia = todos. Existe
+    # para testar num número que também recebe conversas de verdade, e para
+    # piloto fechado. Não se aplica ao protótipo web.
+    allowed_senders: str = field(default_factory=lambda: _env("ALLOWED_SENDERS"))
     # Em produção deixe ligado. Só desligue para testes locais sem APP_SECRET.
     require_signature: bool = field(
         default_factory=lambda: _env_bool("REQUIRE_SIGNATURE", True)

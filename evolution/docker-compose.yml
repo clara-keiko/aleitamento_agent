@@ -48,6 +48,8 @@ services:
       ENABLE_AUDIO: "true"
       REQUIRE_SIGNATURE: "true"
       LOG_LEVEL: INFO
+      # Vazio = responde a todos. Ver evolution/.env.exemplo.
+      ALLOWED_SENDERS: ${ALLOWED_SENDERS:-}
     depends_on:
       - evolution
 

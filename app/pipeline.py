@@ -17,6 +17,34 @@ from app.memory import ConversationStore, KnownUsers, MessageDeduplicator, RateL
 log = get_logger(__name__)
 
 
+def variantes_do_numero(numero: str) -> set[str]:
+    """Formas equivalentes de um mesmo telefone.
+
+    Celular brasileiro tem um 9 depois do DDD, mas o WhatsApp entrega boa
+    parte das contas antigas sem ele: 5521981814170 chega como 552181814170.
+    Comparar só a forma literal faria a lista de permitidos recusar
+    justamente o número que a pessoa digitou certo.
+    """
+    digitos = "".join(c for c in numero if c.isdigit())
+    if not digitos:
+        return set()
+
+    formas = {digitos}
+    if digitos.startswith("55"):
+        if len(digitos) == 13 and digitos[4] == "9":
+            formas.add(digitos[:4] + digitos[5:])
+        elif len(digitos) == 12:
+            formas.add(digitos[:4] + "9" + digitos[4:])
+    return formas
+
+
+def ler_lista_de_permitidos(bruto: str) -> set[str]:
+    permitidos: set[str] = set()
+    for item in (bruto or "").split(","):
+        permitidos |= variantes_do_numero(item)
+    return permitidos
+
+
 class MessagePipeline:
     def __init__(
         self,
@@ -41,6 +69,14 @@ class MessagePipeline:
             window_seconds=settings.rate_limit_window_seconds,
         )
         self.known_users = known_users or KnownUsers()
+        self.permitidos = ler_lista_de_permitidos(settings.allowed_senders)
+
+    def _sender_allowed(self, sender: str) -> bool:
+        # O protótipo web usa id de sessão como remetente, não telefone; a
+        # lista não faz sentido lá e bloquearia toda conversa.
+        if not self.permitidos or self.channel.name == "web":
+            return True
+        return bool(variantes_do_numero(sender) & self.permitidos)
 
     def handle(self, message: IncomingMessage) -> str:
         """Processa a mensagem e devolve o desfecho.
@@ -67,6 +103,11 @@ class MessagePipeline:
             )
 
     def _handle(self, message: IncomingMessage, user: str) -> str:
+        # Antes de tudo, inclusive do dedup: remetente fora da lista não deixa
+        # rastro nenhum — nem memória, nem contagem, nem resposta.
+        if not self._sender_allowed(message.sender):
+            return "fora_da_lista"
+
         if not self.deduplicator.check_and_mark(message.message_id):
             return "duplicada"
 

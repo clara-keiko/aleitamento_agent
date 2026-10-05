@@ -292,3 +292,79 @@ def test_texto_vazio_nao_chama_o_modelo(texto, esperado):
     pipeline, _, engine = build()
     pipeline.handle(text_message(texto))
     assert len(engine.calls) == esperado
+
+
+class TestListaDePermitidos:
+    """Para testar num número que também recebe conversas de verdade.
+
+    O risco concreto: parear o WhatsApp pessoal e o agente responder à
+    família e aos clientes. Com a lista preenchida, só quem está nela recebe
+    resposta — e quem está fora não deixa rastro nenhum.
+    """
+
+    def test_lista_vazia_responde_a_todos(self):
+        pipeline, channel, engine = build()
+        pipeline.handle(text_message("qual a pega correta?", "m1", "5511999999999"))
+        assert len(engine.calls) == 1
+
+    def test_remetente_fora_da_lista_e_ignorado_em_silencio(self):
+        pipeline, channel, engine = build(allowed_senders="5521981814170")
+        resultado = pipeline.handle(
+            text_message("oi, tudo bem?", "m1", "5511999999999")
+        )
+
+        assert resultado == "fora_da_lista"
+        assert engine.calls == []
+        assert channel.sent == []
+
+    def test_remetente_da_lista_e_atendido(self):
+        pipeline, channel, engine = build(allowed_senders="5521981814170")
+        pipeline.handle(text_message("qual a pega correta?", "m1", "5521981814170"))
+        assert len(engine.calls) == 1
+        assert channel.sent
+
+    def test_fora_da_lista_nao_ganha_boas_vindas_depois(self):
+        """Sem rastro: se entrar na lista depois, é tratado como primeiro contato."""
+        pipeline, channel, _ = build(allowed_senders="5521981814170")
+        pipeline.handle(text_message("oi", "m1", "5511999999999"))
+        assert pipeline.known_users.is_first_contact("5511999999999")
+
+    def test_aceita_o_numero_com_ou_sem_o_nove(self):
+        """O WhatsApp entrega muitos celulares brasileiros sem o 9."""
+        pipeline, _, engine = build(allowed_senders="+55 (21) 98181-4170")
+        pipeline.handle(text_message("qual a pega correta?", "m1", "552181814170"))
+        assert len(engine.calls) == 1
+
+    def test_lista_escrita_sem_o_nove_aceita_o_numero_com_nove(self):
+        pipeline, _, engine = build(allowed_senders="552181814170")
+        pipeline.handle(text_message("qual a pega correta?", "m1", "5521981814170"))
+        assert len(engine.calls) == 1
+
+    def test_varios_numeros_separados_por_virgula(self):
+        pipeline, _, engine = build(allowed_senders="5521981814170, 5511988887777")
+        pipeline.handle(text_message("pergunta um", "m1", "5511988887777"))
+        pipeline.handle(text_message("pergunta dois", "m2", "5521981814170"))
+        pipeline.handle(text_message("pergunta tres", "m3", "5531977776666"))
+        assert len(engine.calls) == 2
+
+    def test_emergencia_de_fora_da_lista_tambem_e_ignorada(self):
+        """Documenta a escolha: fora da lista é fora mesmo. A lista é para
+        teste e piloto fechado; em produção aberta ela fica vazia."""
+        pipeline, channel, engine = build(allowed_senders="5521981814170")
+        pipeline.handle(text_message("meu bebe nao respira", "m1", "5511999999999"))
+        assert channel.sent == []
+
+    def test_nao_bloqueia_o_prototipo_web(self):
+        """No web o remetente é id de sessão, não telefone."""
+        from app.channels.web import WebChannel
+
+        settings = Settings(
+            openai_api_key="k", vector_store_id="vs", allowed_senders="5521981814170"
+        )
+        canal = WebChannel()
+        pipeline = MessagePipeline(settings, canal, FakeEngine())
+        resultado = pipeline.handle(
+            IncomingMessage(message_id="w1", sender="sessao-abc", kind="text",
+                            text="qual a pega correta?")
+        )
+        assert resultado != "fora_da_lista"

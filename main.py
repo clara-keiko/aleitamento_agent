@@ -83,9 +83,22 @@ def health() -> JSONResponse:
 
 @app.get("/health/ready")
 def readiness() -> JSONResponse:
-    """Readiness: 503 enquanto faltar configuração para atender de verdade."""
+    """Readiness: 503 enquanto o serviço não puder atender de verdade.
+
+    Com a Evolution, "configurado" não basta: o número pode estar
+    desconectado com todas as variáveis certas. Por isso, nesse canal, o
+    estado da conexão também decide — é este endpoint que um monitor externo
+    deve olhar para avisar quando o WhatsApp cair.
+    """
     payload = _status_payload()
-    return JSONResponse(payload, status_code=200 if not payload["missing_env"] else 503)
+    pronto = not payload["missing_env"]
+
+    if pronto and settings.provider == PROVIDER_EVOLUTION:
+        estado = channel.estado_da_conexao()
+        payload["whatsapp_connection"] = estado
+        pronto = estado == "open"
+
+    return JSONResponse(payload, status_code=200 if pronto else 503)
 
 
 # ----------------------------------------------------------------------

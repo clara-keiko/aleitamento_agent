@@ -286,3 +286,36 @@ class TestOndeAChaveChega:
 
     def test_sem_chave_em_lugar_nenhum(self):
         assert canal().verify_signature(b"{}", {}, "http://a/webhook") is False
+
+
+class TestEnderecoESaudeDaConexao:
+    def test_endereco_sem_esquema_vira_http(self):
+        """No Render o endereço interno chega como host:porta."""
+        c = canal(evolution_base_url="evolution-api-x1y2:8080")
+        assert c.base == "http://evolution-api-x1y2:8080"
+
+    def test_endereco_com_esquema_fica_como_esta(self):
+        c = canal(evolution_base_url="https://evo.exemplo.com/")
+        assert c.base == "https://evo.exemplo.com"
+
+    @pytest.mark.parametrize("corpo,esperado", [
+        ({"instance": {"instanceName": "lactai", "state": "open"}}, "open"),
+        ({"instance": {"instanceName": "lactai", "state": "close"}}, "close"),
+        ({"state": "connecting"}, "connecting"),
+        ({}, "desconhecido"),
+    ])
+    def test_le_o_estado(self, monkeypatch, corpo, esperado):
+        monkeypatch.setattr(
+            "app.channels.evolution.requests.get",
+            lambda url, **kw: FakeResposta(200, corpo),
+        )
+        assert canal().estado_da_conexao() == esperado
+
+    def test_falha_de_rede_vira_desconhecido(self, monkeypatch):
+        import requests
+
+        def explode(url, **kw):
+            raise requests.ConnectionError("fora do ar")
+
+        monkeypatch.setattr("app.channels.evolution.requests.get", explode)
+        assert canal().estado_da_conexao() == "desconhecido"

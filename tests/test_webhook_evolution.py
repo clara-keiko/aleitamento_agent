@@ -153,3 +153,32 @@ class TestChaveNaUrl:
         assert "assinatura inválida" in texto
         assert "segredo-errado-123" not in texto
         assert "apikey=%2A%2A%2A" in texto or "apikey=***" in texto
+
+
+class TestProntidaoRefleteAConexao:
+    """O /health/ready é o que o monitor externo olha. Com a Evolution,
+    variável certa não basta: o número pode ter desconectado."""
+
+    def test_conectado_e_200(self, evolution):
+        import main
+
+        main.channel.estado_da_conexao = lambda: "open"
+        resposta = evolution.get("/health/ready")
+        assert resposta.status_code == 200
+        assert resposta.json()["whatsapp_connection"] == "open"
+
+    def test_desconectado_e_503(self, evolution):
+        import main
+
+        main.channel.estado_da_conexao = lambda: "close"
+        resposta = evolution.get("/health/ready")
+        assert resposta.status_code == 503
+        assert resposta.json()["whatsapp_connection"] == "close"
+
+    def test_liveness_continua_200_mesmo_desconectado(self, evolution):
+        """O healthcheck do Render aponta para /health. Se ele caísse junto,
+        o Render reiniciaria o agente por um problema que é do WhatsApp."""
+        import main
+
+        main.channel.estado_da_conexao = lambda: "close"
+        assert evolution.get("/health").status_code == 200

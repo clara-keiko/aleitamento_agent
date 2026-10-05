@@ -64,8 +64,38 @@ class EvolutionChannel(Channel):
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.base = settings.evolution_base_url.rstrip("/")
+        base = settings.evolution_base_url.strip().rstrip("/")
+        # No Render, o endereço de outro serviço chega como "host:porta", sem
+        # esquema. Dentro da rede privada o tráfego é http.
+        if base and "://" not in base:
+            base = f"http://{base}"
+        self.base = base
         self.instancia = settings.evolution_instance
+
+    def estado_da_conexao(self) -> str:
+        """`open` quando o número está pareado e conectado ao WhatsApp.
+
+        No canal não oficial o risco que importa é a sessão cair sem ninguém
+        perceber — e mãe sem resposta às três da manhã não abre chamado. Este
+        estado vai para o /health/ready, que é o que um monitor externo olha.
+        """
+        try:
+            resposta = requests.get(
+                f"{self.base}/instance/connectionState/{self.instancia}",
+                headers={"apikey": self.settings.evolution_api_key},
+                timeout=5,
+            )
+            resposta.raise_for_status()
+            dados = resposta.json()
+        except (requests.RequestException, ValueError) as exc:
+            log.warning("não consegui consultar a conexão da Evolution: %s", exc)
+            return "desconhecido"
+
+        if not isinstance(dados, dict):
+            return "desconhecido"
+        # v2 responde {"instance": {"state": ...}}; aceita também o estado solto.
+        fonte = dados["instance"] if isinstance(dados.get("instance"), dict) else dados
+        return fonte.get("state") or "desconhecido"
 
     # ------------------------------------------------------------------
     # Autenticidade

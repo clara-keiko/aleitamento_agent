@@ -171,6 +171,55 @@ mascara a chave da URL.
 De outro celular, mande mensagem para o número pareado. Deve chegar a
 apresentação do serviço e depois a resposta.
 
+## Produção no Render
+
+O `render.yaml` sobe três peças pelo mesmo Blueprint do agente: o serviço
+`evolution-api` (com disco para a sessão), o banco `evolution-db` e o agente já
+apontado para a Evolution. O endereço e a chave passam de um serviço para o
+outro sozinhos (`fromService`), sem valor copiado à mão.
+
+Custo aproximado: US$ 7 do agente + US$ 7 da Evolution + ~US$ 6 do banco + o
+disco, ~US$ 20/mês.
+
+1. **Aplicar o Blueprint.** Render → Blueprints → o do projeto → sincronizar.
+   Ele lista o `evolution-api` e o `evolution-db` como novos; confirme.
+2. **Pegar a chave e o endereço.** Em `evolution-api` → Environment, copie o
+   `AUTHENTICATION_API_KEY` gerado. O endereço público está no topo do serviço.
+3. **Desligar a Evolution local antes de parear a nova**, ou o número fica em
+   duas sessões e cada mensagem recebe resposta duplicada:
+   ```bash
+   cd evolution
+   CHAVE=$(grep AUTHENTICATION_API_KEY .env | cut -d= -f2)
+   curl -s -X DELETE -H "apikey: $CHAVE" http://localhost:8080/instance/logout/lactai
+   docker compose down
+   ```
+   No celular, em Aparelhos conectados, remova o aparelho antigo se ele ainda
+   aparecer.
+4. **Parear no servidor:**
+   ```bash
+   export EVOLUTION_BASE_URL='https://evolution-api-XXXX.onrender.com'
+   export EVOLUTION_API_KEY='a-chave-copiada'
+   export EVOLUTION_INSTANCE='lactai'
+   export AGENT_WEBHOOK_URL='https://SEU-APP.onrender.com/webhook'
+   python3 scripts/evolution_setup.py criar
+   python3 scripts/evolution_setup.py qr
+   python3 scripts/evolution_setup.py estado
+   ```
+5. **Conferir:** `https://SEU-APP.onrender.com/health/ready` deve responder 200
+   com `"whatsapp_connection": "open"`.
+
+### Alerta de queda
+
+Com a Evolution, o `/health/ready` responde **503 quando o WhatsApp
+desconecta**, mesmo com toda a configuração certa. O `/health`, que o Render
+usa como healthcheck, continua 200 — senão o Render reiniciaria o agente por um
+problema que é do WhatsApp.
+
+Para ser avisada: crie um monitor HTTP gratuito (UptimeRobot, Better Stack)
+apontando para `/health/ready`, a cada 5 minutos, com alerta por e-mail. Quando
+chegar o alerta, `python3 scripts/evolution_setup.py estado` diz se é sessão
+caída (refazer o `qr`) ou algo maior.
+
 ## Quando não funcionar
 
 | Sintoma | Causa provável |

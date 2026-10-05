@@ -158,8 +158,13 @@ EVOLUTION_INSTANCE = lactai
 ```
 
 A `EVOLUTION_API_KEY` tem papel duplo: o agente a envia ao chamar a Evolution, e
-a confere no header dos webhooks que ela manda. Por isso precisa ser a mesma dos
-dois lados.
+a confere nos webhooks que ela manda. Por isso precisa ser a mesma dos dois lados.
+
+A Evolution (v2.3.7, ao menos) **não repete a chave em header** nas chamadas que
+faz. Por isso os scripts registram o webhook com a chave na própria URL
+(`.../webhook?apikey=...`). O agente também aceita a chave em header `apikey` ou
+no campo `apikey` do corpo, para quem configurar de outro jeito. O log de falha
+mascara a chave da URL.
 
 ### Conversar
 
@@ -170,7 +175,8 @@ apresentação do serviço e depois a resposta.
 
 | Sintoma | Causa provável |
 |---|---|
-| 403 no log do agente | `EVOLUTION_API_KEY` diferente da chave da Evolution |
+| 403 com `assinaturas=nenhuma` | webhook registrado sem a chave na URL — rode `./subir.sh` de novo, que reaponta |
+| 403 com `assinaturas=evolution(url)` | `EVOLUTION_API_KEY` diferente da chave da Evolution |
 | Nada no log do agente | webhook não registrado na instância — refaça o `instance/create`, ou use `POST /webhook/set/{instancia}` |
 | `outcome=respondido` e nada chega | `EVOLUTION_BASE_URL` errada, ou instância desconectada |
 | HTTP 404 no envio | nome da instância não confere |

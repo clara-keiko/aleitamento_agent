@@ -35,6 +35,7 @@ import pathlib
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 QR_PADRAO = "qr.png"
@@ -51,6 +52,28 @@ def _exigir(nome: str) -> str:
     return valor
 
 
+def _conferir_endereco(base: str) -> None:
+    """Recusa endereço de exemplo antes de ele virar traceback.
+
+    Copiar o exemplo da documentação ao pé da letra é o erro mais comum aqui,
+    e "https://evolution-api-....onrender.com" faz o Python quebrar com
+    "label empty or too long" — uma mensagem que não diz nada a quem lê.
+    """
+    host = urllib.parse.urlparse(base).hostname or ""
+    rotulos = host.split(".")
+    if not host or "" in rotulos or any(len(r) > 63 for r in rotulos):
+        sys.exit(
+            f"EVOLUTION_BASE_URL não parece um endereço de verdade: {base}\n"
+            "  → Copie o endereço do serviço evolution-api no painel do Render\n"
+            "    (fica no topo da página do serviço) e exporte de novo."
+        )
+    if any(marca in base.upper() for marca in ("XXXX", "SEU-", "....")):
+        sys.exit(
+            f"EVOLUTION_BASE_URL ainda é o texto de exemplo: {base}\n"
+            "  → Troque pelo endereço real do serviço evolution-api."
+        )
+
+
 def _chamar(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
     base = _exigir("EVOLUTION_BASE_URL").rstrip("/")
     chave = _exigir("EVOLUTION_API_KEY")
@@ -58,6 +81,7 @@ def _chamar(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
 
     if not url.startswith(("https://", "http://")):
         raise ErroDaEvolution(f"Destino inesperado: {url}")
+    _conferir_endereco(base)
 
     dados = json.dumps(corpo).encode() if corpo is not None else None
     pedido = urllib.request.Request(  # noqa: S310 - esquema conferido acima

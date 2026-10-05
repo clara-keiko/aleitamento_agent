@@ -2,16 +2,141 @@ services:
   - type: web
     name: aleitamento-agent
     runtime: python
+    # O plano free hiberna após 15 min: o primeiro webhook depois da pausa
+    # espera ~1 min de cold start e a Meta reentrega o evento nesse meio-tempo.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      # evolution (QR, não oficial), meta (oficial) ou twilio. O LactAI roda
+      # pela Evolution enquanto a Meta não solta a linha de crédito da
+      # Twilio presa na conta; a troca para o oficial é só esta variável.
+      - key: WHATSAPP_PROVIDER
+        value: evolution
+
+      # A Twilio assina a URL pública. Atrás do proxy do Render, request.url
+      # chega como http:// interno e a assinatura nunca bate. Sem isto, todo
+      # webhook vira 403 — e o log só diz "assinatura inválida".
+      # Preencha com https://SEU-APP.onrender.com depois do primeiro deploy.
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # ── Twilio ──────────────────────────────────────────────────────
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      # Sandbox: whatsapp:+14155238886
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+
+      # ── Evolution API (não oficial — ver docs/EVOLUTION.md) ─────────
+      # As duas primeiras vêm do serviço evolution-api, definido abaixo:
+      # o endereço pela rede privada do Render, e a chave gerada por ele.
+      # Assim não há valor para copiar à mão — nem para errar.
+      - key: EVOLUTION_BASE_URL
+        fromService:
+          type: web
+          name: evolution-api
+          property: hostport
+      - key: EVOLUTION_API_KEY
+        fromService:
+          type: web
+          name: evolution-api
+          envVarKey: AUTHENTICATION_API_KEY
+      - key: EVOLUTION_INSTANCE
+        value: lactai
+
+      # ── Meta ────────────────────────────────────────────────────────
+      # Deixe em branco enquanto WHATSAPP_PROVIDER for twilio.
       - key: VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_TOKEN
         sync: false
       - key: PHONE_NUMBER_ID
         sync: false
+      - key: APP_SECRET
+        sync: false
+
       - key: OPENAI_API_KEY
         sync: false
       - key: VECTOR_STORE_ID
         sync: false
+      - key: PSEUDONYM_KEY
+        generateValue: true
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      # gpt-5-mini raciocina antes de responder; esforço baixo mantém a
+      # latência aceitável no WhatsApp.
+      - key: REASONING_EFFORT
+        value: low
+      # 0 = o código escolhe o teto conforme o modelo. Ver .env.example.
+      - key: MAX_OUTPUT_TOKENS
+        value: "0"
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "45"
+      - key: MAX_RETRIEVAL_RESULTS
+        value: "8"
+      - key: ENABLE_WEB
+        value: "true"
+      # Defina no painel antes de compartilhar o link do protótipo.
+      - key: WEB_ACCESS_CODE
+        sync: false
+      - key: ENABLE_AUDIO
+        value: "true"
+      - key: REQUIRE_SIGNATURE
+        value: "true"
+      # Vazio = todos. Preencha para piloto fechado.
+      - key: ALLOWED_SENDERS
+        sync: false
+
+  # ── Evolution API ───────────────────────────────────────────────────
+  # Mantém o número conectado ao WhatsApp. Plano pago de propósito: o free
+  # hiberna, e hibernar aqui não atrasa a resposta — derruba a conexão.
+  - type: web
+    name: evolution-api
+    runtime: image
+    image:
+      url: docker.io/evoapicloud/evolution-api:v2.3.7
+    plan: starter
+    region: oregon
+    healthCheckPath: /
+    # A sessão do pareamento mora aqui. Sem disco, cada deploy pede QR novo.
+    disk:
+      name: evolution-instances
+      mountPath: /evolution/instances
+      sizeGB: 1
+    envVars:
+      # A Evolution escuta na 8080; o Render roteia para a porta em PORT.
+      - key: PORT
+        value: "8080"
+      - key: SERVER_PORT
+        value: "8080"
+      # Senha do serviço. Gerada aqui e repassada ao agente pelo fromService.
+      - key: AUTHENTICATION_API_KEY
+        generateValue: true
+      - key: DATABASE_ENABLED
+        value: "true"
+      - key: DATABASE_PROVIDER
+        value: postgresql
+      - key: DATABASE_CONNECTION_URI
+        fromDatabase:
+          name: evolution-db
+          property: connectionString
+      # Sem Redis: para um número só, o cache em memória basta e poupa um
+      # serviço pago.
+      - key: CACHE_REDIS_ENABLED
+        value: "false"
+      - key: CACHE_LOCAL_ENABLED
+        value: "true"
+
+databases:
+  # Onde a Evolution guarda instâncias e dados. O plano free do Render expira;
+  # este é o menor pago. Se o nome do plano for recusado na criação, escolha o
+  # mais barato na tela — o resto do arquivo não muda.
+  - name: evolution-db
+    plan: basic-256mb
+    region: oregon
+    databaseName: evolution
+    user: evolution

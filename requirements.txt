@@ -1,5 +1,6 @@
-fastapi
-uvicorn
-requests
-openai
-python-dotenv
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+requests==2.32.3
+# Precisa ser 2.x: client.responses e client.vector_stores não existem na 1.x.
+openai==2.48.0
+python-dotenv==1.0.1

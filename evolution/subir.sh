@@ -14,8 +14,10 @@ INSTANCIA="${EVOLUTION_INSTANCE:-lactai}"
 EVO_LOCAL="http://localhost:8080"
 AGENTE_LOCAL="http://localhost:8000"
 # Endereço que a Evolution enxerga de dentro da rede do Docker — não é o
-# mesmo que você abre no navegador.
-WEBHOOK_INTERNO="http://agente:10000/webhook"
+# mesmo que você abre no navegador. A chave entra na URL mais abaixo, depois
+# de lida do .env: a Evolution não a manda em header, e sem ela o agente
+# recusa o webhook.
+WEBHOOK_BASE="http://agente:10000/webhook"
 
 passo() { printf "\n\033[1m%s\033[0m\n" "$*"; }
 erro()  { printf "\n\033[31m%s\033[0m\n" "$*" >&2; }
@@ -53,6 +55,7 @@ fi
 
 set -a; source .env; set +a
 CHAVE="$AUTHENTICATION_API_KEY"
+WEBHOOK_INTERNO="$WEBHOOK_BASE?apikey=$CHAVE"
 
 if [[ -z "${OPENAI_API_KEY:-}" ]]; then
   erro "OPENAI_API_KEY está vazia no .env. Preencha e rode de novo."

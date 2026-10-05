@@ -117,3 +117,39 @@ class TestConfiguracao:
         assert dados["provider"] == "evolution"
         assert dados["whatsapp_ready"] is True
         assert dados["missing_for_whatsapp"] == []
+
+
+class TestChaveNaUrl:
+    """O caminho real: a Evolution chama a URL registrada, com a chave nela."""
+
+    def test_webhook_com_chave_na_url_e_atendido(self, evolution):
+        corpo = json.dumps({
+            "event": "messages.upsert",
+            "instance": "lactai",
+            "data": {
+                "key": {"remoteJid": "5521999999999@s.whatsapp.net",
+                        "fromMe": False, "id": "3EB0-url"},
+                "message": {"conversation": "qual a melhor posição para amamentar?"},
+            },
+        }).encode()
+        resposta = evolution.post(
+            f"/webhook?apikey={CHAVE}", content=corpo,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resposta.status_code == 200
+        assert any("Resposta fundamentada." in c for _, c in evolution.enviados)
+
+    def test_log_de_falha_nao_imprime_a_chave(self, evolution, caplog):
+        """O log de assinatura inválida imprime a URL; a chave não pode ir junto."""
+        import logging
+
+        caplog.set_level(logging.WARNING)
+        evolution.post(
+            "/webhook?apikey=segredo-errado-123",
+            content=b'{"event":"messages.upsert"}',
+            headers={"Content-Type": "application/json"},
+        )
+        texto = "\n".join(r.getMessage() for r in caplog.records)
+        assert "assinatura inválida" in texto
+        assert "segredo-errado-123" not in texto
+        assert "apikey=%2A%2A%2A" in texto or "apikey=***" in texto

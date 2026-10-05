@@ -12,6 +12,7 @@ curto para denúncia e banimento).
 """
 
 import base64
+import json
 
 import pytest
 
@@ -254,3 +255,34 @@ class TestSelecaoDoProvedor:
         assert faltando == [
             "EVOLUTION_API_KEY", "EVOLUTION_BASE_URL", "EVOLUTION_INSTANCE"
         ]
+
+
+class TestOndeAChaveChega:
+    """Regressão: a Evolution v2.3.7 não manda a chave em header.
+
+    O webhook chegou com `assinaturas=nenhuma` e foi recusado. Agora a chave
+    vai na URL registrada, e o corpo e o header continuam aceitos para quem
+    configurar de outro jeito.
+    """
+
+    def test_chave_na_url(self):
+        url = f"http://agente:10000/webhook?apikey={CHAVE}"
+        assert canal().verify_signature(b"{}", {}, url) is True
+
+    def test_chave_errada_na_url(self):
+        url = "http://agente:10000/webhook?apikey=outra"
+        assert canal().verify_signature(b"{}", {}, url) is False
+
+    def test_chave_no_corpo(self):
+        corpo = json.dumps({"event": "messages.upsert", "apikey": CHAVE}).encode()
+        assert canal().verify_signature(corpo, {}, "http://a/webhook") is True
+
+    def test_chave_errada_no_corpo(self):
+        corpo = b'{"event":"messages.upsert","apikey":"outra"}'
+        assert canal().verify_signature(corpo, {}, "http://a/webhook") is False
+
+    def test_corpo_invalido_nao_derruba(self):
+        assert canal().verify_signature(b"nao sou json", {}, "http://a/webhook") is False
+
+    def test_sem_chave_em_lugar_nenhum(self):
+        assert canal().verify_signature(b"{}", {}, "http://a/webhook") is False

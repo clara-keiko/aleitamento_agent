@@ -11,7 +11,7 @@ import hmac
 import json
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -192,7 +192,7 @@ def verify_webhook(
     return PlainTextResponse("Forbidden", status_code=403)
 
 
-def _assinaturas_presentes(headers: dict) -> str:
+def _assinaturas_presentes(headers: dict, url: str = "") -> str:
     """Diz *qual* provedor assinou, não só que veio assinatura.
 
     Um webhook da Twilio chegando num app em modo Meta é indistinguível de
@@ -206,7 +206,22 @@ def _assinaturas_presentes(headers: dict) -> str:
         "apikey": "evolution",
     }
     achados = [rotulo for header, rotulo in conhecidos.items() if headers.get(header)]
+    if "apikey" in parse_qs(urlparse(url).query):
+        achados.append("evolution(url)")
     return ",".join(achados)
+
+
+def _sem_segredos(url: str) -> str:
+    """A URL do webhook da Evolution leva a chave no query string; o log
+    de falha imprime a URL, e não pode imprimir a chave junto."""
+    partes = urlparse(url)
+    if not partes.query:
+        return url
+    consulta = parse_qs(partes.query, keep_blank_values=True)
+    for nome in ("apikey", "token", "key"):
+        if nome in consulta:
+            consulta[nome] = ["***"]
+    return partes._replace(query=urlencode(consulta, doseq=True)).geturl()
 
 
 def _impressao_da_credencial() -> str:
@@ -251,9 +266,9 @@ async def receive_webhook(request: Request, background: BackgroundTasks) -> Resp
         log.warning(
             "assinatura inválida no webhook; descartando "
             "(url_conferida=%s origem_da_url=%s assinaturas=%s credencial=%s)",
-            signed_url,
+            _sem_segredos(signed_url),
             "PUBLIC_BASE_URL" if settings.public_base_url else "request.url",
-            _assinaturas_presentes(headers) or "nenhuma",
+            _assinaturas_presentes(headers, signed_url) or "nenhuma",
             _impressao_da_credencial(),
         )
         return JSONResponse({"status": "forbidden"}, status_code=403)

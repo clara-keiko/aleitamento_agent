@@ -21,7 +21,9 @@ mudado, o log diz qual chave chegou e o ajuste fica localizado em
 
 import base64
 import hmac
+import json
 import time
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -43,6 +45,20 @@ def _numero_do_jid(jid: str) -> str:
     return (jid or "").split("@", 1)[0].split(":", 1)[0].strip()
 
 
+def _chave_na_url(url: str) -> str:
+    valores = parse_qs(urlparse(url or "").query).get("apikey") or [""]
+    return valores[0]
+
+
+def _chave_no_corpo(raw_body: bytes) -> str:
+    try:
+        dados = json.loads(raw_body or b"{}")
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    chave = dados.get("apikey") if isinstance(dados, dict) else ""
+    return chave if isinstance(chave, str) else ""
+
+
 class EvolutionChannel(Channel):
     name = "evolution"
 
@@ -55,20 +71,30 @@ class EvolutionChannel(Channel):
     # Autenticidade
     # ------------------------------------------------------------------
     def verify_signature(self, raw_body: bytes, headers: dict, url: str) -> bool:
-        """A Evolution não assina o corpo; ela repete a apikey no header.
+        """Confere a chave do serviço, onde quer que ela venha.
 
-        É autenticação mais fraca que a HMAC da Meta e da Twilio — quem tiver
-        a chave forja qualquer mensagem. Como a URL do webhook é pública, a
-        chave é a única barreira: trate-a como senha.
+        A Evolution não assina o corpo, e o lugar da chave muda conforme a
+        versão e a configuração: header `apikey`, campo `apikey` no corpo, ou
+        nenhum. Por isso o webhook é registrado com a chave na própria URL
+        (`?apikey=...`), que é o único lugar sob nosso controle — e os outros
+        dois continuam aceitos para quem configurar de outro jeito.
+
+        É autenticação mais fraca que a HMAC da Meta e da Twilio: quem tiver a
+        chave forja qualquer mensagem. Trate-a como senha.
         """
         if not self.settings.require_signature:
             return True
 
         esperada = self.settings.evolution_api_key
-        recebida = headers.get("apikey") or headers.get("Apikey") or ""
-        if not esperada or not recebida:
+        if not esperada:
             return False
-        return hmac.compare_digest(esperada, recebida)
+
+        candidatas = [
+            headers.get("apikey") or headers.get("Apikey") or "",
+            _chave_na_url(url),
+            _chave_no_corpo(raw_body),
+        ]
+        return any(c and hmac.compare_digest(esperada, c) for c in candidatas)
 
     # ------------------------------------------------------------------
     # Entrada

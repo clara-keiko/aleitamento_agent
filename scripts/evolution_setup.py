@@ -86,6 +86,17 @@ def _chamar(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
         ) from erro
 
 
+def _webhook_com_chave() -> str:
+    """URL do agente com a chave no query string.
+
+    A Evolution não repete a chave em header nas chamadas que faz, e o agente
+    recusa webhook sem ela. A URL é o único lugar sob nosso controle.
+    """
+    base = _exigir("AGENT_WEBHOOK_URL")
+    separador = "&" if "?" in base else "?"
+    return f"{base}{separador}apikey={_exigir('EVOLUTION_API_KEY')}"
+
+
 def _mostrar(dados: dict) -> None:
     print(json.dumps(dados, indent=2, ensure_ascii=False))
 
@@ -95,7 +106,7 @@ def _mostrar(dados: dict) -> None:
 
 def cmd_criar(args: argparse.Namespace) -> int:
     instancia = _exigir("EVOLUTION_INSTANCE")
-    webhook = _exigir("AGENT_WEBHOOK_URL")
+    webhook = _webhook_com_chave()
 
     corpo = {
         "instanceName": instancia,
@@ -129,7 +140,7 @@ def cmd_criar(args: argparse.Namespace) -> int:
 def cmd_webhook(args: argparse.Namespace) -> int:
     """Reaponta o webhook de uma instância que já existe."""
     instancia = _exigir("EVOLUTION_INSTANCE")
-    webhook = _exigir("AGENT_WEBHOOK_URL")
+    webhook = _webhook_com_chave()
 
     corpo = {
         "webhook": {
@@ -146,7 +157,8 @@ def cmd_webhook(args: argparse.Namespace) -> int:
         print(erro)
         return 1
 
-    print(f"\nWebhook apontado para {webhook}")
+    print(f"\nWebhook apontado para {_exigir('AGENT_WEBHOOK_URL')}"
+          " (com a chave na URL)")
     return 0
 
 

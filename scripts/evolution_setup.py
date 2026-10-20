@@ -234,7 +234,10 @@ def cmd_estado(args: argparse.Namespace) -> int:
     estado = json.dumps(resposta)
     if '"open"' in estado:
         print("\n✅ Pareada e conectada.")
-        print("Agora defina no agente (painel do Render):")
+        print("Se o agente foi criado pelo Blueprint (render.yaml), ele já está")
+        print("ligado a esta Evolution e não há mais nada a configurar. Confira em")
+        print("/health/ready, que deve mostrar \"whatsapp_connection\": \"open\".")
+        print("\nSe o agente foi configurado à mão, defina nele:")
         print("  WHATSAPP_PROVIDER  = evolution")
         print(f"  EVOLUTION_BASE_URL = {os.environ.get('EVOLUTION_BASE_URL', '')}")
         print(f"  EVOLUTION_INSTANCE = {instancia}")

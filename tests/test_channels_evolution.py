@@ -319,3 +319,42 @@ class TestEnderecoESaudeDaConexao:
 
         monkeypatch.setattr("app.channels.evolution.requests.get", explode)
         assert canal().estado_da_conexao() == "desconhecido"
+
+
+class TestChaveComCaracteresDeUrl:
+    """Regressão: a chave gerada pelo Render é base64, com "+", "/" e "=".
+
+    Na URL, "+" sem codificar vira espaço. O script de pareamento passou a
+    codificar; estes testes fixam os dois lados do contrato.
+    """
+
+    CHAVE_BASE64 = "hJCF+x4/QpCC0="
+
+    def test_chave_codificada_na_url_e_aceita(self):
+        from urllib.parse import quote
+
+        c = canal(evolution_api_key=self.CHAVE_BASE64)
+        url = f"https://agente/webhook?apikey={quote(self.CHAVE_BASE64, safe='')}"
+        assert c.verify_signature(b"{}", {}, url) is True
+
+    def test_chave_sem_codificar_e_recusada(self):
+        """Documenta por que o script codifica: o "+" vira espaço."""
+        c = canal(evolution_api_key=self.CHAVE_BASE64)
+        url = f"https://agente/webhook?apikey={self.CHAVE_BASE64}"
+        assert c.verify_signature(b"{}", {}, url) is False
+
+    def test_script_monta_a_url_codificada(self, monkeypatch):
+        import importlib.util
+        from pathlib import Path
+
+        monkeypatch.setenv("AGENT_WEBHOOK_URL", "https://agente/webhook")
+        monkeypatch.setenv("EVOLUTION_API_KEY", self.CHAVE_BASE64)
+        caminho = Path(__file__).resolve().parent.parent / "scripts" / "evolution_setup.py"
+        spec = importlib.util.spec_from_file_location("evolution_setup", caminho)
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+
+        url = modulo._webhook_com_chave()
+        assert url == "https://agente/webhook?apikey=hJCF%2Bx4%2FQpCC0%3D"
+        assert canal(evolution_api_key=self.CHAVE_BASE64).verify_signature(
+            b"{}", {}, url) is True

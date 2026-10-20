@@ -118,7 +118,10 @@ def _webhook_com_chave() -> str:
     """
     base = _exigir("AGENT_WEBHOOK_URL")
     separador = "&" if "?" in base else "?"
-    return f"{base}{separador}apikey={_exigir('EVOLUTION_API_KEY')}"
+    # A chave gerada pelo Render é base64: tem "+", "/" e "=". Sem codificar,
+    # o "+" chega ao agente como espaço e todo webhook vira 403.
+    chave = urllib.parse.quote(_exigir("EVOLUTION_API_KEY"), safe="")
+    return f"{base}{separador}apikey={chave}"
 
 
 def _mostrar(dados: dict) -> None:

@@ -106,7 +106,7 @@ services:
       # vagas acabam, o link para de aceitar gente nova sozinho. Para abrir
       # mais vagas, aumente o número — quem já entrou continua.
       - key: CONVITES
-        value: PILOTO30:30
+        value: PILOTO30:35
       # Perguntas por pessoa por dia (só as que chamam o modelo).
       - key: LIMITE_DIARIO_POR_PESSOA
         value: "20"

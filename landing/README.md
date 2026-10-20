@@ -35,8 +35,11 @@ página parece de terceiro; com ele, a hospedagem vira informação declarada.
 
 1. **Troque o e-mail de contato** se `contato@watanabeaitech.com.br` não estiver ativo
    — o revisor pode escrever
-2. **Ligue os botões** — os `href="#"` precisam apontar para
-   `https://wa.me/55DDDNUMERO` e para o checkout
+2. **Botões** — o do WhatsApp aponta para o número do LactAI
+   (`+55 21 93618-6344`), já com "Oi, LactAI" escrito para a mãe só tocar em
+   enviar. "Assinar" e "Falar com a gente" abrem e-mail para
+   `contato@watanabeaitech.com.br` enquanto não houver checkout; confirme que
+   essa caixa recebe
 3. **Publique os links** de Privacidade e Termos, ou remova-os do rodapé enquanto
    não existirem
 

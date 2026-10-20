@@ -1,3 +1,5 @@
+import pytest
+
 from app import guardrails
 from app.guardrails import EDUCATIONAL_OK, EMERGENCY_NOW, REFER_MEDICAL_CARE, classify_risk
 
@@ -90,3 +92,23 @@ class TestNormalizacao:
 
     def test_none_seguro(self):
         assert guardrails.normalize("") == ""
+
+
+class TestNomeDoServicoECumprimento:
+    """O botão da landing abre a conversa com "Oi, LactAI". Se isso não for
+    reconhecido como cumprimento, a primeira resposta que a mãe recebe é
+    "não encontrei no material"."""
+
+    @pytest.mark.parametrize("texto", [
+        "Oi, LactAI", "oi lactai", "Olá, LactAI!", "obrigada, LactAI", "LactAI",
+        "bom dia lact ai",
+    ])
+    def test_cumprimento_com_o_nome_e_social(self, texto):
+        assert guardrails.is_small_talk(texto)
+
+    @pytest.mark.parametrize("texto", [
+        "LactAI, como aumento a produção de leite?",
+        "oi lactai, meu bebê não pega o peito",
+    ])
+    def test_pergunta_que_cita_o_nome_continua_pergunta(self, texto):
+        assert not guardrails.is_small_talk(texto)

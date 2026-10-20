@@ -103,6 +103,10 @@ GENERAL_QUESTION_PATTERNS = [
 # a mensagem como social só se ela for feita inteiramente deles. Assim
 # "ok, entendi" e "oi, bom dia, tudo bem?" funcionam sem enumerar combinações.
 SOCIAL_TOKENS = [
+    # O nome do serviço: a mãe escreve "oi, LactAI" ou "obrigada, LactAI",
+    # e o botão da landing já abre a conversa com "Oi, LactAI". Sem isto,
+    # o cumprimento ia para o modelo e voltava como "não encontrei".
+    r"lact ?ai",
     r"oi+",
     r"ola",
     r"opa",

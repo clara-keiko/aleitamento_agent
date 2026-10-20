@@ -13,6 +13,13 @@ from app.config import Settings
 from app.llm import AssistantEngine, fallback_message
 from app.logging_utils import get_logger, pseudonymize
 from app.memory import ConversationStore, KnownUsers, MessageDeduplicator, RateLimiter
+from app.piloto import (
+    AUTORIZADO,
+    ESGOTADO,
+    RegistroDoPiloto,
+    custo_da_resposta,
+    encontrar_codigo,
+)
 
 log = get_logger(__name__)
 
@@ -55,6 +62,7 @@ class MessagePipeline:
         deduplicator: MessageDeduplicator | None = None,
         rate_limiter: RateLimiter | None = None,
         known_users: KnownUsers | None = None,
+        piloto: RegistroDoPiloto | None = None,
     ):
         self.settings = settings
         self.channel = channel
@@ -70,6 +78,7 @@ class MessagePipeline:
         )
         self.known_users = known_users or KnownUsers()
         self.permitidos = ler_lista_de_permitidos(settings.allowed_senders)
+        self.piloto = piloto
 
     def _sender_allowed(self, sender: str) -> bool:
         # O protótipo web usa id de sessão como remetente, não telefone; a
@@ -111,6 +120,10 @@ class MessagePipeline:
         if not self.deduplicator.check_and_mark(message.message_id):
             return "duplicada"
 
+        portao = self._portao_do_convite(message)
+        if portao:
+            return portao
+
         if not self.rate_limiter.allow(message.sender):
             self.channel.send_text(message.sender, guardrails.rate_limited_message())
             return "rate_limited"
@@ -147,8 +160,16 @@ class MessagePipeline:
             self.channel.send_text(message.sender, guardrails.small_talk_message())
             return "social"
 
+        # Limites só aqui, depois da triagem: emergência, encaminhamento e
+        # cumprimento não gastam modelo, e nenhum teto pode impedir uma mãe
+        # de receber a orientação de ligar para o 192.
+        bloqueio = self._checar_limites(message.sender)
+        if bloqueio:
+            return bloqueio
+
         history = self.conversations.history(message.sender)
         answer = self.engine.answer(text, history=history)
+        self._registrar_uso(message.sender, answer)
 
         if answer.error:
             self.channel.send_text(message.sender, fallback_message())
@@ -168,6 +189,100 @@ class MessagePipeline:
 
         self.channel.send_text(message.sender, reply)
         return "respondido_com_nota" if risk.needs_safety_note else "respondido"
+
+    # ------------------------------------------------------------------
+    # Fase de testes
+    # ------------------------------------------------------------------
+    def _portao_do_convite(self, message: IncomingMessage) -> str | None:
+        """Decide se a mensagem segue. None = segue; texto = desfecho.
+
+        Não vale no protótipo web (o remetente é sessão do navegador, e ele
+        já tem código de acesso próprio) nem com MODO_ACESSO=aberto.
+        """
+        if (
+            self.piloto is None
+            or self.settings.modo_acesso != "convite"
+            or self.channel.name == "web"
+        ):
+            return None
+
+        sender = message.sender
+        texto = (message.text or "").strip() if message.kind == "text" else ""
+        codigo = encontrar_codigo(texto, self.piloto.codigos)
+
+        if self.piloto.autorizado(sender) or (
+            self.permitidos and variantes_do_numero(sender) & self.permitidos
+        ):
+            if codigo:
+                # Tocou no link de novo. Sem isto, a frase do convite iria
+                # ao modelo e voltaria como "não encontrei no material".
+                self.channel.send_text(sender, guardrails.pilot_already_member_message())
+                return "convite_repetido"
+            return None
+
+        if codigo:
+            resultado = self.piloto.usar_convite(sender, codigo)
+            if resultado == AUTORIZADO:
+                # Marca como conhecida para as boas-vindas gerais não se
+                # repetirem na primeira pergunta.
+                self.known_users.is_first_contact(sender)
+                self.channel.send_text(sender, guardrails.welcome_message())
+                self.channel.send_text(
+                    sender,
+                    guardrails.pilot_welcome_message(self.settings.limite_diario_por_pessoa),
+                )
+                return "convite_aceito"
+            if resultado == ESGOTADO:
+                self.channel.send_text(sender, guardrails.pilot_invite_full_message())
+                return "convite_esgotado"
+
+        # Fora do piloto, mas em emergência: a triagem não gasta modelo, e
+        # a orientação de ligar para o 192 não depende de convite.
+        if texto and guardrails.classify_risk(texto).level == guardrails.EMERGENCY_NOW:
+            self.channel.send_text(sender, guardrails.emergency_message())
+            return "emergencia_nao_convidado"
+
+        if self.piloto.deve_avisar_recusa(sender):
+            self.channel.send_text(sender, guardrails.pilot_closed_message())
+            return "nao_convidado"
+        return "nao_convidado_silencio"
+
+    def _checar_limites(self, sender: str) -> str | None:
+        if self.piloto is None:
+            return None
+
+        orcamento = self.settings.orcamento_mensal_usd
+        if orcamento > 0 and self.piloto.gasto_do_mes() >= orcamento:
+            self.channel.send_text(sender, guardrails.budget_exhausted_message())
+            return "orcamento_esgotado"
+
+        limite = self.settings.limite_diario_por_pessoa
+        if (
+            limite > 0
+            and self.channel.name != "web"
+            and self.piloto.perguntas_hoje(sender) >= limite
+        ):
+            self.channel.send_text(sender, guardrails.daily_limit_message(limite))
+            return "limite_diario"
+        return None
+
+    def _registrar_uso(self, sender: str, answer) -> None:
+        """Toda chamada ao modelo conta, inclusive a que não foi entregue.
+
+        Resposta recusada por falta de fundamentação também gastou token.
+        """
+        if self.piloto is None:
+            return
+        custo = custo_da_resposta(
+            answer.input_tokens,
+            answer.output_tokens,
+            self.settings.preco_entrada_usd_1m,
+            self.settings.preco_saida_usd_1m,
+        )
+        # Sem token, a chamada falhou antes de buscar na base.
+        if answer.input_tokens:
+            custo += self.settings.custo_busca_usd
+        self.piloto.registrar_pergunta(None if self.channel.name == "web" else sender, custo)
 
     def _forget(self, sender: str) -> None:
         """Apaga tudo que guardamos de um usuário (LGPD, direito de eliminação)."""

@@ -41,6 +41,16 @@ def pseudonymize(phone: str) -> str:
     return f"u_{digest.hexdigest()[:12]}"
 
 
+def hash_estavel(valor: str) -> str:
+    """HMAC completo, para guardar telefone em banco sem guardar o telefone.
+
+    Usa a mesma chave do pseudônimo de log. Trocar PSEUDONYM_KEY torna os
+    registros antigos impossíveis de reconhecer — no piloto, isso significa
+    tirar o acesso de todo mundo que já entrou.
+    """
+    return hmac.new(_PSEUDONYM_KEY, valor.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def redact(text: str, keep: int = 0) -> str:
     """Descreve um texto sem revelá-lo.
 

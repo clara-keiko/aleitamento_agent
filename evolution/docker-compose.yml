@@ -50,6 +50,17 @@ services:
       LOG_LEVEL: INFO
       # Vazio = responde a todos. Ver evolution/.env.exemplo.
       ALLOWED_SENDERS: ${ALLOWED_SENDERS:-}
+      # Fase de testes. Ver docs/PILOTO.md.
+      MODO_ACESSO: ${MODO_ACESSO:-aberto}
+      CONVITES: ${CONVITES:-}
+      LIMITE_DIARIO_POR_PESSOA: ${LIMITE_DIARIO_POR_PESSOA:-0}
+      ORCAMENTO_MENSAL_USD: ${ORCAMENTO_MENSAL_USD:-0}
+      NUMERO_WHATSAPP: ${NUMERO_WHATSAPP:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      DB_PATH: /app/data/lactai.db
+    volumes:
+      # Convites e contadores. Perder este volume = todo mundo sai do piloto.
+      - agente_dados:/app/data
     depends_on:
       - evolution
 
@@ -92,6 +103,7 @@ services:
       - evolution_redis:/data
 
 volumes:
+  agente_dados:
   evolution_instances:
   evolution_postgres:
   evolution_redis:

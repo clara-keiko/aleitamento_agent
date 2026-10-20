@@ -6,12 +6,15 @@ demora, e uma chamada com file_search leva vários segundos. Processando de
 forma síncrona, a mãe recebia a mesma resposta duas ou três vezes.
 """
 
+import base64
 import hashlib
 import hmac
+import html
 import json
+import sqlite3
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse
+from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -22,6 +25,7 @@ from app.channels.web import WebChannel
 from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, settings
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
+from app.piloto import RegistroDoPiloto, ler_convites
 from app.pipeline import MessagePipeline
 
 configure_logging()
@@ -31,13 +35,34 @@ app = FastAPI(title="Agente de Aleitamento", version="2.1.0")
 
 channel = build_channel(settings)
 engine = AssistantEngine(settings)
-pipeline = MessagePipeline(settings, channel, engine)
+
+
+def _abrir_registro() -> RegistroDoPiloto:
+    """Abre o banco do piloto; se o disco falhar, segue em memória.
+
+    Desligar os limites em silêncio seria o pior desfecho: o orçamento
+    deixaria de proteger justamente quando algo deu errado. Em memória eles
+    continuam valendo — só zeram a cada reinício, e o log avisa.
+    """
+    convites = ler_convites(settings.convites)
+    try:
+        return RegistroDoPiloto(settings.db_path, convites)
+    except (OSError, sqlite3.Error) as exc:
+        log.error(
+            "não consegui abrir %s (%s); convites e limites ficam em memória "
+            "e zeram a cada reinício", settings.db_path, exc,
+        )
+        return RegistroDoPiloto(":memory:", convites)
+
+
+piloto = _abrir_registro()
+pipeline = MessagePipeline(settings, channel, engine, piloto=piloto)
 
 # Protótipo web: mesmo motor, mesmo pipeline, canal diferente. Ganha o próprio
 # MessagePipeline só para que histórico e rate limit do navegador não se
 # misturem com os do WhatsApp.
 web_channel = WebChannel()
-web_pipeline = MessagePipeline(settings, web_channel, engine)
+web_pipeline = MessagePipeline(settings, web_channel, engine, piloto=piloto)
 
 CHAT_HTML = Path(__file__).parent / "app" / "static" / "chat.html"
 PRIVACIDADE_HTML = Path(__file__).parent / "app" / "static" / "privacidade.html"
@@ -117,6 +142,103 @@ def chat_ui() -> Response:
     if not settings.enable_web:
         return PlainTextResponse("Not Found", status_code=404)
     return HTMLResponse(CHAT_HTML.read_text(encoding="utf-8"))
+
+
+# ----------------------------------------------------------------------
+# Painel do piloto
+# ----------------------------------------------------------------------
+
+def _admin_autorizado(headers) -> bool:
+    """Autenticação básica do navegador: ele mesmo pede a senha.
+
+    Senha na URL (?token=) ficaria no histórico e no log de acesso do
+    servidor. Com Basic auth, o navegador abre a janela de login e guarda a
+    senha só durante a sessão. O usuário é ignorado; vale a senha.
+    """
+    esperado = settings.admin_token
+    cabecalho = headers.get("authorization", "")
+    if not esperado or not cabecalho.lower().startswith("basic "):
+        return False
+    try:
+        decodificado = base64.b64decode(cabecalho[6:]).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    _, _, senha = decodificado.partition(":")
+    return hmac.compare_digest(senha, esperado)
+
+
+def _link_de_convite(codigo: str) -> str:
+    numero = "".join(c for c in settings.numero_whatsapp if c.isdigit())
+    if not numero:
+        return ""
+    texto = quote(f"Quero participar da fase de testes do LactAI {codigo}", safe="")
+    return f"https://wa.me/{numero}?text={texto}"
+
+
+@app.get("/admin/piloto", response_class=HTMLResponse)
+def painel_do_piloto(request: Request) -> Response:
+    if not settings.admin_token:
+        return PlainTextResponse("Not Found", status_code=404)
+    if not _admin_autorizado(request.headers):
+        return PlainTextResponse(
+            "Senha necessária", status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="LactAI piloto", charset="UTF-8"'},
+        )
+
+    r = piloto.resumo()
+    orcamento = settings.orcamento_mensal_usd
+    limite = settings.limite_diario_por_pessoa
+    e = html.escape
+
+    linhas_convite = "".join(
+        f"<tr><td><code>{e(c['codigo'])}</code></td>"
+        f"<td>{c['usados']} de {c['limite'] or '∞'}</td>"
+        f"<td>{_bloco_link(_link_de_convite(c['codigo']))}</td></tr>"
+        for c in r["convites"]
+    ) or '<tr><td colspan="3">Nenhum convite configurado (variável CONVITES).</td></tr>'
+
+    gasto = r["gasto_do_mes_usd"]
+    teto = f" de US$ {orcamento:.2f}" if orcamento else " (sem teto)"
+    alerta = (
+        '<p class="alerta">Orçamento do mês atingido: o agente parou de chamar o modelo.</p>'
+        if orcamento and gasto >= orcamento else ""
+    )
+    modo = "convite (fechado)" if settings.modo_acesso == "convite" else "aberto"
+
+    pagina = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piloto LactAI</title><style>
+body{{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;
+color:#1b1b1f;background:#fbfaf8}}
+h1{{font-size:1.4rem;margin:0 0 .25rem}} .sub{{color:#5c5f66;margin:0 0 1.5rem}}
+.grade{{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.75rem;margin-bottom:1.5rem}}
+.num{{background:#fff;border:1px solid #e2dfd9;border-radius:6px;padding:.8rem 1rem}}
+.num b{{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}}
+.num span{{color:#5c5f66;font-size:.85rem}}
+table{{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2dfd9}}
+td,th{{padding:.6rem .75rem;border-bottom:1px solid #e2dfd9;text-align:left;vertical-align:top}}
+input{{width:100%;font:inherit;font-size:.8rem;padding:.3rem}} code{{font-size:.95rem}}
+.alerta{{background:#fdeee8;border-left:3px solid #b2451c;padding:.7rem 1rem}}
+</style></head><body>
+<h1>Fase de testes do LactAI</h1>
+<p class="sub">Hoje: {e(r["dia"])} · acesso: {e(modo)}</p>
+{alerta}
+<div class="grade">
+  <div class="num"><b>{r["testadores"]}</b><span>testadoras autorizadas</span></div>
+  <div class="num"><b>{r["ativos_hoje"]}</b><span>perguntaram hoje</span></div>
+  <div class="num"><b>{r["perguntas_hoje"]}</b><span>perguntas hoje</span></div>
+  <div class="num"><b>US$ {gasto:.2f}</b><span>gasto do mês{e(teto)}</span></div>
+</div>
+<p class="sub">Limite por pessoa: {limite or "sem limite"} perguntas por dia.</p>
+<table><tr><th>Convite</th><th>Vagas</th><th>Link para enviar</th></tr>{linhas_convite}</table>
+</body></html>"""
+    return HTMLResponse(pagina, headers={"Cache-Control": "no-store"})
+
+
+def _bloco_link(link: str) -> str:
+    if not link:
+        return "<em>defina NUMERO_WHATSAPP para gerar o link</em>"
+    return f'<input readonly value="{html.escape(link)}" onclick="this.select()">'
 
 
 @app.get("/privacidade", response_class=HTMLResponse)

@@ -300,3 +300,66 @@ OPT_OUT_KEYWORDS = {"sair", "parar", "cancelar", "stop", "descadastrar"}
 
 def is_opt_out(text: str) -> bool:
     return normalize(text).strip(" .!") in OPT_OUT_KEYWORDS
+
+
+# ----------------------------------------------------------------------
+# Fase de testes (ver app/piloto.py)
+# ----------------------------------------------------------------------
+# Toda mensagem desta seção que pode chegar a alguém fora do atendimento
+# normal leva o 192. Quem escreve pode estar numa emergência, e o limite de
+# uso nunca pode ser o motivo de uma mãe ficar sem saber para onde ligar.
+
+
+def pilot_welcome_message(limite_diario: int) -> str:
+    limite = (
+        f"Nesta fase, cada pessoa pode fazer até *{limite_diario} perguntas por dia*. "
+        if limite_diario
+        else ""
+    )
+    return (
+        "Pronto, seu número entrou na *fase de testes do LactAI*! 💛\n\n"
+        "Pode mandar suas dúvidas sobre amamentação e cuidados com o bebê, "
+        "por texto ou por áudio. "
+        f"{limite}"
+        "Sua opinião é o que vai fazer o serviço melhorar: quando quiser, "
+        "conte o que achou das respostas."
+    )
+
+
+def pilot_already_member_message() -> str:
+    return "Você já faz parte da fase de testes. É só mandar a sua dúvida. 😊"
+
+
+def pilot_invite_full_message() -> str:
+    return (
+        "As vagas deste convite para a fase de testes já foram preenchidas. "
+        "Se você acha que deveria participar, fale com quem te enviou o link.\n\n"
+        "Em caso de emergência com o bebê, ligue *192*."
+    )
+
+
+def pilot_closed_message() -> str:
+    return (
+        "Oi! O LactAI está numa *fase de testes fechada*, só para quem "
+        "recebeu convite. Se você recebeu um link de convite, toque nele "
+        "para entrar.\n\n"
+        "Em caso de emergência com o bebê, ligue *192*."
+    )
+
+
+def daily_limit_message(limite: int) -> str:
+    return (
+        f"Você chegou ao limite de {limite} perguntas de hoje nesta fase de "
+        "testes. A contagem recomeça amanhã. 💛\n\n"
+        "Se for uma situação urgente com o bebê, procure atendimento ou "
+        "ligue *192*."
+    )
+
+
+def budget_exhausted_message() -> str:
+    return (
+        "O LactAI atingiu o limite de uso da fase de testes por enquanto, e "
+        "não consegue responder novas perguntas agora.\n\n"
+        "Se for uma situação urgente com o bebê, procure atendimento ou "
+        "ligue *192*."
+    )

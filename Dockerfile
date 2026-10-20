@@ -13,7 +13,8 @@ COPY app ./app
 COPY main.py ingest_openai_kb.py ./
 
 # Não roda como root: se o container for comprometido, limita o estrago.
-RUN useradd --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/data && chown appuser /app/data
 USER appuser
 
 EXPOSE 10000

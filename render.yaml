@@ -8,6 +8,12 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    # Convites, testadoras e contadores de uso da fase de testes. Sem disco,
+    # cada deploy zeraria tudo e as 30 pessoas perderiam o acesso.
+    disk:
+      name: lactai-dados
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       # evolution (QR, não oficial), meta (oficial) ou twilio. O LactAI roda
       # pela Evolution enquanto a Meta não solta a linha de crédito da
@@ -87,9 +93,35 @@ services:
         value: "true"
       - key: REQUIRE_SIGNATURE
         value: "true"
-      # Vazio = todos. Preencha para piloto fechado.
+      # Números sempre liberados, além dos convidados (ex.: o seu, para
+      # testar). Separados por vírgula.
       - key: ALLOWED_SENDERS
         sync: false
+
+      # ── Fase de testes (ver docs/PILOTO.md) ─────────────────────────
+      # convite = só conversa quem entrou pelo link; aberto = todo mundo.
+      - key: MODO_ACESSO
+        value: convite
+      # CODIGO:VAGAS. O código vai dentro do link de convite; quando as
+      # vagas acabam, o link para de aceitar gente nova sozinho. Para abrir
+      # mais vagas, aumente o número — quem já entrou continua.
+      - key: CONVITES
+        value: PILOTO30:30
+      # Perguntas por pessoa por dia (só as que chamam o modelo).
+      - key: LIMITE_DIARIO_POR_PESSOA
+        value: "20"
+      # Teto do mês em dólares com a OpenAI. Atingiu, o agente para de
+      # chamar o modelo até o mês virar (emergência continua respondida).
+      - key: ORCAMENTO_MENSAL_USD
+        value: "15"
+      - key: DB_PATH
+        value: /var/data/lactai.db
+      # Número do LactAI, para montar o link de convite no painel.
+      - key: NUMERO_WHATSAPP
+        value: "5521936186344"
+      # Senha do painel /admin/piloto. Veja em Environment, no Render.
+      - key: ADMIN_TOKEN
+        generateValue: true
 
   # ── Evolution API ───────────────────────────────────────────────────
   # Mantém o número conectado ao WhatsApp. Plano pago de propósito: o free

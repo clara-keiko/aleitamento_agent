@@ -34,6 +34,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = _env(name).replace(",", ".")
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = _env(name).lower()
     if not raw:
@@ -115,6 +125,41 @@ class Settings:
     # para testar num número que também recebe conversas de verdade, e para
     # piloto fechado. Não se aplica ao protótipo web.
     allowed_senders: str = field(default_factory=lambda: _env("ALLOWED_SENDERS"))
+
+    # Fase de testes (ver app/piloto.py e docs/PILOTO.md).
+    # "convite": só quem entrou por um código de convite conversa.
+    # "aberto": qualquer um. Não se aplica ao protótipo web.
+    modo_acesso: str = field(default_factory=lambda: _env("MODO_ACESSO", "aberto").lower())
+    # "CODIGO:VAGAS" separados por vírgula. Ex.: "MAMAE2026:30".
+    convites: str = field(default_factory=lambda: _env("CONVITES"))
+    # Perguntas que chamam o modelo, por pessoa, por dia. 0 = sem limite.
+    limite_diario_por_pessoa: int = field(
+        default_factory=lambda: _env_int("LIMITE_DIARIO_POR_PESSOA", 0)
+    )
+    # Teto de gasto com o modelo no mês, em dólares. 0 = sem teto.
+    orcamento_mensal_usd: float = field(
+        default_factory=lambda: _env_float("ORCAMENTO_MENSAL_USD", 0.0)
+    )
+    # Preço do modelo por 1 milhão de tokens, para converter o consumo real
+    # em dólares. Padrão: gpt-5-mini. ⚠️ Confira em platform.openai.com/pricing
+    # se trocar de modelo ou se a tabela mudar.
+    preco_entrada_usd_1m: float = field(
+        default_factory=lambda: _env_float("PRECO_ENTRADA_USD_1M", 0.25)
+    )
+    preco_saida_usd_1m: float = field(
+        default_factory=lambda: _env_float("PRECO_SAIDA_USD_1M", 2.00)
+    )
+    # A OpenAI cobra cada busca na base à parte dos tokens (file_search:
+    # US$ 2,50 por mil chamadas). Sem isto, o gasto apurado sairia pela metade.
+    custo_busca_usd: float = field(
+        default_factory=lambda: _env_float("CUSTO_BUSCA_USD", 0.0025)
+    )
+    # Onde ficam convites e contadores. Em produção, num disco persistente.
+    db_path: str = field(default_factory=lambda: _env("DB_PATH", "data/lactai.db"))
+    # Senha do painel /admin/piloto. Vazia = painel desligado.
+    admin_token: str = field(default_factory=lambda: _env("ADMIN_TOKEN"))
+    # Número do serviço, só para montar o link de convite no painel.
+    numero_whatsapp: str = field(default_factory=lambda: _env("NUMERO_WHATSAPP"))
     # Em produção deixe ligado. Só desligue para testes locais sem APP_SECRET.
     require_signature: bool = field(
         default_factory=lambda: _env_bool("REQUIRE_SIGNATURE", True)

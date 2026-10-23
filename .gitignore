@@ -1,3 +1,12 @@
 .env
+*.env
+!.env.example
 venv/
+.venv/
 __pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# Banco do piloto (convites e contadores) quando roda local.
+data/

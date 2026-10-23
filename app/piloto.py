@@ -100,6 +100,24 @@ def ler_convites(bruto: str) -> dict[str, int]:
     return convites
 
 
+def ler_numeros(bruto: str) -> list[str]:
+    """Números colados no painel, um por linha ou separados por vírgula.
+
+    Aceita do jeito que se copia do WhatsApp: com espaço, traço, parêntese,
+    com ou sem +55. Sem DDI, assume Brasil. O que não parece telefone é
+    devolvido vazio, para o painel apontar a linha.
+    """
+    numeros: list[str] = []
+    for item in re.split(r"[\n,;]+", bruto or ""):
+        if not item.strip():
+            continue
+        digitos = "".join(c for c in item if c.isdigit())
+        if len(digitos) in (10, 11):
+            digitos = "55" + digitos
+        numeros.append(numero_canonico(digitos) if 12 <= len(digitos) <= 15 else "")
+    return numeros
+
+
 def encontrar_codigo(texto: str, codigos: list[str]) -> str | None:
     """Código de convite presente na mensagem, como palavra inteira."""
     if not texto or not codigos:

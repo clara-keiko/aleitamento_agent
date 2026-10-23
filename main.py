@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import html
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Annotated
@@ -25,7 +26,15 @@ from app.channels.web import WebChannel
 from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, settings
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
-from app.piloto import RegistroDoPiloto, ler_convites
+from app.piloto import (
+    AUTORIZADO,
+    CODIGO_INVALIDO,
+    ESGOTADO,
+    JA_AUTORIZADO,
+    RegistroDoPiloto,
+    ler_convites,
+    ler_numeros,
+)
 from app.pipeline import MessagePipeline
 
 configure_logging()
@@ -167,6 +176,24 @@ def _admin_autorizado(headers) -> bool:
     return hmac.compare_digest(senha, esperado)
 
 
+def _negar_admin(request: Request) -> Response | None:
+    """None = pode entrar. Senão, a resposta de recusa."""
+    if not settings.admin_token:
+        return PlainTextResponse("Not Found", status_code=404)
+    if not _admin_autorizado(request.headers):
+        return PlainTextResponse(
+            "Senha necessária", status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="LactAI piloto", charset="UTF-8"'},
+        )
+    # O navegador reenvia a senha do Basic auth a qualquer pedido para este
+    # endereço, inclusive um formulário escondido em outro site. A origem
+    # diferente é o sinal de que não foi você quem clicou.
+    origem = request.headers.get("origin")
+    if origem and urlparse(origem).netloc != request.headers.get("host", ""):
+        return PlainTextResponse("Origem não permitida", status_code=403)
+    return None
+
+
 def _link_de_convite(codigo: str) -> str:
     numero = "".join(c for c in settings.numero_whatsapp if c.isdigit())
     if not numero:
@@ -175,15 +202,39 @@ def _link_de_convite(codigo: str) -> str:
     return f"https://wa.me/{numero}?text={texto}"
 
 
+_ESTILO_PAINEL = """
+body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;
+color:#1b1b1f;background:#fbfaf8}
+h1{font-size:1.4rem;margin:0 0 .25rem} h2{font-size:1.1rem;margin:2rem 0 .25rem}
+.sub{color:#5c5f66;margin:0 0 1.5rem}
+.grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.75rem;margin-bottom:1.5rem}
+.num{background:#fff;border:1px solid #e2dfd9;border-radius:6px;padding:.8rem 1rem}
+.num b{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.num span{color:#5c5f66;font-size:.85rem}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2dfd9}
+td,th{padding:.6rem .75rem;border-bottom:1px solid #e2dfd9;text-align:left;vertical-align:top}
+input,textarea,select{width:100%;box-sizing:border-box;font:inherit;font-size:.9rem;padding:.4rem}
+input[readonly]{font-size:.8rem;padding:.3rem} code{font-size:.95rem}
+button{font:inherit;margin-top:.5rem;padding:.5rem 1rem;background:#1b1b1f;color:#fff;
+border:0;border-radius:6px;cursor:pointer}
+.alerta{background:#fdeee8;border-left:3px solid #b2451c;padding:.7rem 1rem}
+"""
+
+
+def _pagina_admin(titulo: str, corpo: str) -> HTMLResponse:
+    pagina = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(titulo)}</title><style>{_ESTILO_PAINEL}</style></head><body>
+{corpo}
+</body></html>"""
+    return HTMLResponse(pagina, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/admin/piloto", response_class=HTMLResponse)
 def painel_do_piloto(request: Request) -> Response:
-    if not settings.admin_token:
-        return PlainTextResponse("Not Found", status_code=404)
-    if not _admin_autorizado(request.headers):
-        return PlainTextResponse(
-            "Senha necessária", status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="LactAI piloto", charset="UTF-8"'},
-        )
+    negado = _negar_admin(request)
+    if negado:
+        return negado
 
     r = piloto.resumo()
     orcamento = settings.orcamento_mensal_usd
@@ -205,21 +256,7 @@ def painel_do_piloto(request: Request) -> Response:
     )
     modo = "convite (fechado)" if settings.modo_acesso == "convite" else "aberto"
 
-    pagina = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Piloto LactAI</title><style>
-body{{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;
-color:#1b1b1f;background:#fbfaf8}}
-h1{{font-size:1.4rem;margin:0 0 .25rem}} .sub{{color:#5c5f66;margin:0 0 1.5rem}}
-.grade{{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.75rem;margin-bottom:1.5rem}}
-.num{{background:#fff;border:1px solid #e2dfd9;border-radius:6px;padding:.8rem 1rem}}
-.num b{{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}}
-.num span{{color:#5c5f66;font-size:.85rem}}
-table{{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2dfd9}}
-td,th{{padding:.6rem .75rem;border-bottom:1px solid #e2dfd9;text-align:left;vertical-align:top}}
-input{{width:100%;font:inherit;font-size:.8rem;padding:.3rem}} code{{font-size:.95rem}}
-.alerta{{background:#fdeee8;border-left:3px solid #b2451c;padding:.7rem 1rem}}
-</style></head><body>
+    return _pagina_admin("Piloto LactAI", f"""
 <h1>Fase de testes do LactAI</h1>
 <p class="sub">Hoje: {e(r["dia"])} · acesso: {e(modo)}</p>
 {alerta}
@@ -231,14 +268,85 @@ input{{width:100%;font:inherit;font-size:.8rem;padding:.3rem}} code{{font-size:.
 </div>
 <p class="sub">Limite por pessoa: {limite or "sem limite"} perguntas por dia.</p>
 <table><tr><th>Convite</th><th>Vagas</th><th>Link para enviar</th></tr>{linhas_convite}</table>
-</body></html>"""
-    return HTMLResponse(pagina, headers={"Cache-Control": "no-store"})
+{_formulario_liberar(r["convites"])}""")
 
 
 def _bloco_link(link: str) -> str:
     if not link:
         return "<em>defina NUMERO_WHATSAPP para gerar o link</em>"
     return f'<input readonly value="{html.escape(link)}" onclick="this.select()">'
+
+
+def _formulario_liberar(convites: list[dict]) -> str:
+    if not convites:
+        return ""
+    e = html.escape
+    if len(convites) == 1:
+        escolha = f'<input type="hidden" name="codigo" value="{e(convites[0]["codigo"])}">'
+    else:
+        opcoes = "".join(
+            f'<option value="{e(c["codigo"])}">{e(c["codigo"])}</option>' for c in convites
+        )
+        escolha = f'<p>Convite: <select name="codigo">{opcoes}</select></p>'
+    return f"""
+<h2>Liberar números à mão</h2>
+<p class="sub">Para quem mandou a mensagem do convite e ficou sem resposta (por
+exemplo, com o WhatsApp desconectado). Cada número ocupa uma vaga e recebe as
+boas-vindas na hora. <b>Só cole números que pediram para entrar:</b> mensagem
+para quem não pediu é o que faz o WhatsApp bloquear o número.</p>
+<form method="post" action="/admin/piloto/liberar">{escolha}
+<textarea name="numeros" rows="5" placeholder="(21) 99999-0000&#10;um número por linha"></textarea>
+<button type="submit">Liberar e mandar boas-vindas</button>
+</form>"""
+
+
+_ROTULO_LIBERACAO = {
+    AUTORIZADO: "liberado, boas-vindas enviadas",
+    JA_AUTORIZADO: "já estava liberado; nada enviado",
+    ESGOTADO: "não liberado: vagas esgotadas",
+    CODIGO_INVALIDO: "não liberado: convite inexistente",
+}
+
+
+@app.post("/admin/piloto/liberar", response_class=HTMLResponse)
+async def liberar_numeros(request: Request, background_tasks: BackgroundTasks) -> Response:
+    negado = _negar_admin(request)
+    if negado:
+        return negado
+
+    formulario = dict(parse_qsl((await request.body()).decode("utf-8", "replace")))
+    codigo = formulario.get("codigo", "").strip().upper()
+    brutos = [b for b in re.split(r"[\n,;]+", formulario.get("numeros", "")) if b.strip()]
+    voltar = '<p><a href="/admin/piloto">← Voltar ao painel</a></p>'
+
+    # Liberar com o WhatsApp caído gastaria a vaga e a mensagem se perderia:
+    # a pessoa continuaria sem saber que entrou.
+    if settings.provider == PROVIDER_EVOLUTION:
+        estado = channel.estado_da_conexao()
+        if estado != "open":
+            return _pagina_admin("Piloto LactAI", f"""
+<h1>WhatsApp desconectado</h1>
+<p class="alerta">O número está <b>{html.escape(estado)}</b>. Reconecte pelo QR
+antes de liberar, ou as boas-vindas não chegam. Nada foi alterado.</p>{voltar}""")
+
+    linhas = []
+    for bruto in brutos:
+        numero = ler_numeros(bruto)[0]
+        final = numero[-4:] if numero else "".join(c for c in bruto if c.isdigit())[-4:]
+        if not numero:
+            resultado = "não parece um telefone; confira e tente de novo"
+        else:
+            situacao = piloto.usar_convite(numero, codigo)
+            resultado = _ROTULO_LIBERACAO[situacao]
+            if situacao == AUTORIZADO:
+                background_tasks.add_task(pipeline.boas_vindas_tardias, numero)
+        linhas.append(f"<tr><td>…{html.escape(final)}</td><td>{html.escape(resultado)}</td></tr>")
+
+    log.info("liberação manual: %d número(s) pelo painel", len(linhas))
+    tabela = "".join(linhas) or '<tr><td colspan="2">Nenhum número informado.</td></tr>'
+    return _pagina_admin("Piloto LactAI", f"""
+<h1>Liberação manual</h1>
+<table><tr><th>Final</th><th>Resultado</th></tr>{tabela}</table>{voltar}""")
 
 
 @app.get("/privacidade", response_class=HTMLResponse)

@@ -26,6 +26,7 @@ from app.piloto import (
     custo_da_resposta,
     encontrar_codigo,
     ler_convites,
+    ler_numeros,
     numero_canonico,
 )
 from app.pipeline import MessagePipeline
@@ -97,6 +98,11 @@ class TestLeitura:
 
     def test_fixo_nao_ganha_nove(self):
         assert numero_canonico("552133334444") == "552133334444"
+
+    def test_numeros_colados_do_whatsapp(self):
+        assert ler_numeros("+55 21 98181-4170\n(21) 8181-4170, 11 91234-5678;\n\nabc") == [
+            "5521981814170", "5521981814170", "5511912345678", "",
+        ]
 
     def test_custo(self):
         # 1M de entrada a US$ 0,25 + 1M de saída a US$ 2,00
@@ -431,3 +437,85 @@ class TestPainel:
         link = main._link_de_convite("MAMAE2026")
         texto = parse_qs(urlparse(link).query)["text"][0]
         assert encontrar_codigo(texto, ["MAMAE2026"]) == "MAMAE2026"
+
+
+class TestLiberacaoManual:
+    @pytest.fixture
+    def liberar(self, painel):
+        main, client = painel(ADMIN_TOKEN="segredo-forte", CONVITES="MAMAE2026:2")
+        canal = FakeChannel()
+        main.pipeline.channel = canal
+
+        def enviar(numeros, **extra):
+            return client.post(
+                "/admin/piloto/liberar",
+                data={"codigo": "MAMAE2026", "numeros": numeros},
+                headers={**_basic("segredo-forte"), **extra},
+            )
+
+        return main, canal, enviar
+
+    def test_libera_e_manda_boas_vindas(self, liberar):
+        main, canal, enviar = liberar
+        resposta = enviar("(21) 98181-4170")
+        assert resposta.status_code == 200
+        assert "liberado, boas-vindas enviadas" in resposta.text
+        assert main.piloto.autorizado("552181814170")
+        assert {para for para, _ in canal.sent} == {"5521981814170"}
+        assert "Desculpe a demora" in canal.bodies
+        assert "192" in canal.bodies
+
+    def test_primeira_pergunta_depois_nao_repete_boas_vindas(self, liberar):
+        main, canal, enviar = liberar
+        enviar("21 98181-4170")
+        main.pipeline.engine.answer = lambda t, history=None: Answer(text="ok", grounded=True)
+        canal.sent.clear()
+        # A resposta dela chega sem o 9.
+        desfecho = main.pipeline.handle(text_message("como amamentar?", "m1", "552181814170"))
+        assert desfecho == "respondido"
+        assert "assistente educativo" not in canal.bodies
+
+    def test_ja_liberado_nao_recebe_de_novo(self, liberar):
+        main, canal, enviar = liberar
+        main.piloto.usar_convite("5521981814170", "MAMAE2026")
+        resposta = enviar("21981814170")
+        assert "já estava liberado" in resposta.text
+        assert canal.sent == []
+
+    def test_respeita_as_vagas(self, liberar):
+        _, canal, enviar = liberar
+        resposta = enviar("21900000001\n21900000002\n21900000003\nlixo")
+        assert resposta.text.count("boas-vindas enviadas") == 2
+        assert "vagas esgotadas" in resposta.text
+        assert "não parece um telefone" in resposta.text
+        # O número inteiro não aparece na página, só o final.
+        assert "900000003" not in resposta.text
+
+    def test_exige_senha(self, liberar):
+        main, _, _ = liberar
+        resposta = TestClient(main.app).post(
+            "/admin/piloto/liberar", data={"codigo": "MAMAE2026", "numeros": "21900000001"}
+        )
+        assert resposta.status_code == 401
+        assert not main.piloto.autorizado("21900000001")
+
+    def test_recusa_formulario_de_outro_site(self, liberar):
+        main, canal, enviar = liberar
+        resposta = enviar("21900000001", Origin="https://site-malicioso.example")
+        assert resposta.status_code == 403
+        assert not main.piloto.autorizado("5521900000001")
+        assert canal.sent == []
+
+    def test_whatsapp_desconectado_nao_libera(self, liberar, monkeypatch):
+        main, canal, enviar = liberar
+        monkeypatch.setattr(main.settings, "provider", "evolution")
+        main.channel.estado_da_conexao = lambda: "close"
+        resposta = enviar("21900000001")
+        assert "WhatsApp desconectado" in resposta.text
+        assert not main.piloto.autorizado("5521900000001")
+        assert canal.sent == []
+
+    def test_painel_mostra_o_formulario(self, liberar):
+        main, _, _ = liberar
+        resposta = TestClient(main.app).get("/admin/piloto", headers=_basic("segredo-forte"))
+        assert 'action="/admin/piloto/liberar"' in resposta.text

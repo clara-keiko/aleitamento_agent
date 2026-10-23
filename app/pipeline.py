@@ -247,6 +247,19 @@ class MessagePipeline:
             return "nao_convidado"
         return "nao_convidado_silencio"
 
+    def boas_vindas_tardias(self, numero: str) -> None:
+        """Mensagens de entrada para quem foi liberado pelo painel.
+
+        A autorização já foi feita; aqui é só avisar a pessoa. Marca todas as
+        formas do número como conhecidas: a resposta dela pode chegar sem o 9.
+        """
+        for forma in variantes_do_numero(numero):
+            self.known_users.is_first_contact(forma)
+        self.channel.send_text(
+            numero, guardrails.pilot_late_welcome_message(self.settings.limite_diario_por_pessoa)
+        )
+        self.channel.send_text(numero, guardrails.welcome_message())
+
     def _checar_limites(self, sender: str) -> str | None:
         if self.piloto is None:
             return None

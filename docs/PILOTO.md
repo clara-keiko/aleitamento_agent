@@ -41,6 +41,20 @@ O navegador pede usuário e senha: **usuário qualquer**, senha = valor de
 
 O painel nunca mostra telefone: o banco guarda só o HMAC do número.
 
+### Liberar números à mão
+
+Quando alguém manda a mensagem do convite e fica sem resposta (o caso típico:
+o WhatsApp estava desconectado), cole o número no campo **Liberar números à
+mão**, no fim do painel. A pessoa é liberada, ocupa uma vaga e recebe as
+boas-vindas com um pedido de desculpas pela demora.
+
+- Funciona só com o WhatsApp conectado; se não estiver, o painel avisa e não
+  altera nada.
+- Só cole números que pediram para entrar. Mensagem para quem não pediu é o
+  que leva o WhatsApp a bloquear um número não oficial.
+- Para achar quem tentou: no celular do LactAI, as conversas com a frase do
+  convite sem resposta embaixo.
+
 ## Ajustes (Render → aleitamento-agent → Environment)
 
 | Variável | Valor atual | Para que serve |

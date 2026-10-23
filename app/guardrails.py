@@ -326,6 +326,15 @@ def pilot_welcome_message(limite_diario: int) -> str:
     )
 
 
+def pilot_late_welcome_message(limite_diario: int) -> str:
+    """Para quem pediu para entrar e ficou sem resposta, liberado pelo painel."""
+    return (
+        "Oi! Você pediu para entrar na fase de testes do LactAI e nosso número "
+        "ficou fora do ar por um tempo. Desculpe a demora!\n\n"
+        + pilot_welcome_message(limite_diario)
+    )
+
+
 def pilot_already_member_message() -> str:
     return "Você já faz parte da fase de testes. É só mandar a sua dúvida. 😊"
 

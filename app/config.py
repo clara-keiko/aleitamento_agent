@@ -79,6 +79,9 @@ class Settings:
         default_factory=lambda: _env_int("EVOLUTION_SEND_DELAY_MS", 1200)
     )
 
+    # De quanto em quanto tempo conferir se o número caiu e religar. 0 desliga.
+    vigia_intervalo_s: int = field(default_factory=lambda: _env_int("VIGIA_INTERVALO_S", 120))
+
     # OpenAI
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     vector_store_id: str = field(default_factory=lambda: _env("VECTOR_STORE_ID"))

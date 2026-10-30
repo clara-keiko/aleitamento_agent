@@ -97,6 +97,35 @@ class EvolutionChannel(Channel):
         fonte = dados["instance"] if isinstance(dados.get("instance"), dict) else dados
         return fonte.get("state") or "desconhecido"
 
+    def reconectar(self) -> str:
+        """Pede à Evolution para religar a sessão salva.
+
+        A Evolution só religa sozinha, ao reiniciar, as instâncias que estavam
+        abertas no banco. Mas, quando o Render reinicia o serviço (deploy,
+        sincronização do Blueprint, manutenção), a conexão fecha antes do
+        desligamento e fica gravada como `close` — e o número volta mudo. As
+        credenciais continuam salvas: um `connect` basta, sem QR.
+
+        Devolve `reconectando`, `precisa_qr` (a sessão foi desfeita no
+        celular e só um humano escaneando resolve) ou `falhou`.
+        """
+        try:
+            resposta = requests.get(
+                f"{self.base}/instance/connect/{self.instancia}",
+                headers={"apikey": self.settings.evolution_api_key},
+                timeout=15,
+            )
+            resposta.raise_for_status()
+            dados = resposta.json()
+        except (requests.RequestException, ValueError) as exc:
+            log.warning("não consegui pedir a reconexão à Evolution: %s", exc)
+            return "falhou"
+
+        qr = isinstance(dados, dict) and (
+            dados.get("base64") or (dados.get("qrcode") or {}).get("base64")
+        )
+        return "precisa_qr" if qr else "reconectando"
+
     # ------------------------------------------------------------------
     # Autenticidade
     # ------------------------------------------------------------------

@@ -36,6 +36,7 @@ from app.piloto import (
     ler_numeros,
 )
 from app.pipeline import MessagePipeline
+from app.vigia import VigiaDaConexao
 
 configure_logging()
 log = get_logger(__name__)
@@ -101,6 +102,19 @@ def _status_payload() -> dict:
         "missing_for_whatsapp": settings.missing(),
         "missing_env": missing,
     }
+
+
+if settings.provider == PROVIDER_EVOLUTION and settings.ready:
+    vigia = VigiaDaConexao(channel, intervalo_s=settings.vigia_intervalo_s)
+
+    @app.on_event("startup")
+    def _ligar_vigia() -> None:
+        if settings.vigia_intervalo_s > 0:
+            vigia.iniciar()
+
+    @app.on_event("shutdown")
+    def _desligar_vigia() -> None:
+        vigia.parar()
 
 
 @app.get("/health")

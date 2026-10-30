@@ -215,6 +215,14 @@ desconecta**, mesmo com toda a configuração certa. O `/health`, que o Render
 usa como healthcheck, continua 200 — senão o Render reiniciaria o agente por um
 problema que é do WhatsApp.
 
+**O agente religa sozinho** a cada 2 minutos (`VIGIA_INTERVALO_S`). A
+Evolution só reconecta, ao reiniciar, a sessão que estava aberta no banco; mas
+um reinício do Render (deploy, sincronização do Blueprint, manutenção) fecha a
+conexão antes de desligar e grava `close`. As credenciais continuam salvas, e
+um `instance/connect` basta. Se a sessão foi desfeita no celular, a Evolution
+devolve um QR em vez de religar: aí só o pareamento manual resolve, e o vigia
+espera 30 min antes de tentar de novo.
+
 Para ser avisada: crie um monitor HTTP gratuito (UptimeRobot, Better Stack)
 apontando para `/health/ready`, a cada 5 minutos, com alerta por e-mail. Quando
 chegar o alerta, `python3 scripts/evolution_setup.py estado` diz se é sessão
@@ -230,6 +238,7 @@ caída (refazer o `qr`) ou algo maior.
 | `outcome=respondido` e nada chega | `EVOLUTION_BASE_URL` errada, ou instância desconectada |
 | HTTP 404 no envio | nome da instância não confere |
 | Pede QR a cada deploy | falta o Disk; a sessão não está persistindo |
+| Caiu logo depois de deploy ou sincronização | reinício da Evolution; o agente religa em até 2 min. Se não religar, a sessão foi desfeita: reparear |
 | Parou de responder do nada | sessão caiu — veja `connectionState`; se for `close`, reparear. Se repetir, pode ser banimento |
 
 ## O que continua igual nos três canais

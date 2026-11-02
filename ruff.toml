@@ -1,0 +1,24 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplificações
+    "S",   # bandit (segurança)
+]
+ignore = [
+    "S101", # assert é o normal em teste
+    "E501", # comprimento já é controlado pelo formatter
+]
+
+[lint.per-file-ignores]
+# Testes acessam atributos privados de propósito, para checar limpeza de memória.
+"tests/*" = ["S105", "S106", "SLF001"]
+# O script de ingestão imprime para o operador; é a interface dele.
+"ingest_openai_kb.py" = ["T201"]
+"evals/*" = ["T201"]

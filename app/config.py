@@ -82,6 +82,17 @@ class Settings:
     # De quanto em quanto tempo conferir se o número caiu e religar. 0 desliga.
     vigia_intervalo_s: int = field(default_factory=lambda: _env_int("VIGIA_INTERVALO_S", 120))
 
+    # "Digitando..." antes de cada balão, proporcional ao tamanho do texto,
+    # até este teto. Resposta instantânea, sem digitação, é assinatura de robô.
+    # 0 desliga.
+    evolution_digitando_max_ms: int = field(
+        default_factory=lambda: _env_int("EVOLUTION_DIGITANDO_MAX_MS", 6000)
+    )
+    # Pausa entre as pessoas liberadas à mão pelo painel, para não virar rajada.
+    pausa_entre_liberacoes_s: int = field(
+        default_factory=lambda: _env_int("PAUSA_ENTRE_LIBERACOES_S", 20)
+    )
+
     # OpenAI
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     vector_store_id: str = field(default_factory=lambda: _env("VECTOR_STORE_ID"))

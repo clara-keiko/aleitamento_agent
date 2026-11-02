@@ -226,6 +226,18 @@ class EvolutionChannel(Channel):
     # ------------------------------------------------------------------
     # Saída
     # ------------------------------------------------------------------
+    def _corpo_do_envio(self, to: str, texto: str) -> dict:
+        """Com `delay`, a Evolution mostra "digitando..." por esse tempo antes
+        de enviar. O WhatsApp restringiu o número por "atividade que pode
+        caracterizar mensagens automáticas": resposta longa chegando no
+        mesmo segundo é o sinal mais óbvio disso.
+        """
+        corpo = {"number": to, "text": texto}
+        teto = self.settings.evolution_digitando_max_ms
+        if teto > 0:
+            corpo["delay"] = min(1200 + 25 * len(texto), teto)
+        return corpo
+
     def send_text(self, to: str, body: str, sleep=time.sleep) -> bool:
         url = f"{self.base}/message/sendText/{self.instancia}"
         cabecalhos = {
@@ -243,7 +255,7 @@ class EvolutionChannel(Channel):
 
             resposta = post_with_retry(
                 url,
-                json={"number": to, "text": parte},
+                json=self._corpo_do_envio(to, parte),
                 headers=cabecalhos,
                 timeout=TIMEOUT,
             )

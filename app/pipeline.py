@@ -226,10 +226,12 @@ class MessagePipeline:
                 # Marca como conhecida para as boas-vindas gerais não se
                 # repetirem na primeira pergunta.
                 self.known_users.is_first_contact(sender)
-                self.channel.send_text(sender, guardrails.welcome_message())
+                # Um balão só: cada mensagem a mais conta para o WhatsApp.
                 self.channel.send_text(
                     sender,
-                    guardrails.pilot_welcome_message(self.settings.limite_diario_por_pessoa),
+                    guardrails.welcome_message()
+                    + "\n\n"
+                    + guardrails.pilot_welcome_message(self.settings.limite_diario_por_pessoa),
                 )
                 return "convite_aceito"
             if resultado == ESGOTADO:
@@ -242,7 +244,9 @@ class MessagePipeline:
             self.channel.send_text(sender, guardrails.emergency_message())
             return "emergencia_nao_convidado"
 
-        if self.piloto.deve_avisar_recusa(sender):
+        # Um aviso por mês, não por dia: mensagem a quem não é testadora é
+        # justamente o tipo de envio que mais pesa contra o número.
+        if self.piloto.deve_avisar_recusa(sender, intervalo_horas=24 * 30):
             self.channel.send_text(sender, guardrails.pilot_closed_message())
             return "nao_convidado"
         return "nao_convidado_silencio"
@@ -256,9 +260,11 @@ class MessagePipeline:
         for forma in variantes_do_numero(numero):
             self.known_users.is_first_contact(forma)
         self.channel.send_text(
-            numero, guardrails.pilot_late_welcome_message(self.settings.limite_diario_por_pessoa)
+            numero,
+            guardrails.pilot_late_welcome_message(self.settings.limite_diario_por_pessoa)
+            + "\n\n"
+            + guardrails.welcome_message(),
         )
-        self.channel.send_text(numero, guardrails.welcome_message())
 
     def _checar_limites(self, sender: str) -> str | None:
         if self.piloto is None:

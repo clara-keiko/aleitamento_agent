@@ -13,6 +13,7 @@ import html
 import json
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse
@@ -322,6 +323,12 @@ _ROTULO_LIBERACAO = {
 }
 
 
+def _boas_vindas_com_pausa(numero: str, pausa_s: float) -> None:
+    # As tarefas rodam em fila, então a pausa espaça uma pessoa da outra.
+    time.sleep(pausa_s)
+    pipeline.boas_vindas_tardias(numero)
+
+
 @app.post("/admin/piloto/liberar", response_class=HTMLResponse)
 async def liberar_numeros(request: Request, background_tasks: BackgroundTasks) -> Response:
     negado = _negar_admin(request)
@@ -344,6 +351,7 @@ async def liberar_numeros(request: Request, background_tasks: BackgroundTasks) -
 antes de liberar, ou as boas-vindas não chegam. Nada foi alterado.</p>{voltar}""")
 
     linhas = []
+    liberados = 0
     for bruto in brutos:
         numero = ler_numeros(bruto)[0]
         final = numero[-4:] if numero else "".join(c for c in bruto if c.isdigit())[-4:]
@@ -353,7 +361,9 @@ antes de liberar, ou as boas-vindas não chegam. Nada foi alterado.</p>{voltar}"
             situacao = piloto.usar_convite(numero, codigo)
             resultado = _ROTULO_LIBERACAO[situacao]
             if situacao == AUTORIZADO:
-                background_tasks.add_task(pipeline.boas_vindas_tardias, numero)
+                pausa = settings.pausa_entre_liberacoes_s if liberados else 0
+                background_tasks.add_task(_boas_vindas_com_pausa, numero, pausa)
+                liberados += 1
         linhas.append(f"<tr><td>…{html.escape(final)}</td><td>{html.escape(resultado)}</td></tr>")
 
     log.info("liberação manual: %d número(s) pelo painel", len(linhas))

@@ -162,7 +162,29 @@ class TestEnvio:
         url, kwargs = chamadas[0]
         assert url == "https://evo.exemplo.com/message/sendText/lactai"
         assert kwargs["headers"]["apikey"] == CHAVE
-        assert kwargs["json"] == {"number": "5521999999999", "text": "resposta curta"}
+        assert kwargs["json"]["number"] == "5521999999999"
+        assert kwargs["json"]["text"] == "resposta curta"
+
+    def test_mostra_digitando_proporcional_ao_texto(self, monkeypatch):
+        corpos = []
+        monkeypatch.setattr(
+            "app.channels.evolution.post_with_retry",
+            lambda url, **kw: corpos.append(kw["json"]) or FakeResposta(200),
+        )
+        c = canal(evolution_digitando_max_ms=6000)
+        c.send_text("5521999999999", "oi")
+        c.send_text("5521999999999", "x" * 1000)
+        curto, longo = corpos[0]["delay"], corpos[1]["delay"]
+        assert 1000 <= curto < longo == 6000
+
+    def test_digitando_pode_ser_desligado(self, monkeypatch):
+        corpos = []
+        monkeypatch.setattr(
+            "app.channels.evolution.post_with_retry",
+            lambda url, **kw: corpos.append(kw["json"]) or FakeResposta(200),
+        )
+        canal(evolution_digitando_max_ms=0).send_text("5521999999999", "oi")
+        assert "delay" not in corpos[0]
 
     def test_resposta_longa_vira_varios_baloes_com_pausa(self, monkeypatch):
         """A pausa evita rajada, que é o padrão que os detectores procuram."""

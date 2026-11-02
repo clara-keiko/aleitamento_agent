@@ -19,7 +19,7 @@ repassado.
 | Convidada pergunta | Responde normalmente |
 | Convidada toca no link de novo | "Você já faz parte" |
 | Vagas acabaram | Avisa que o convite está cheio |
-| Número sem convite | Avisa que a fase é fechada, **no máximo uma vez a cada 24 h**; depois fica em silêncio |
+| Número sem convite | Avisa que a fase é fechada, **no máximo uma vez por mês**; depois fica em silêncio |
 | Emergência, de qualquer número | Sempre orienta ligar 192 |
 | Passou do limite do dia | Avisa que a contagem volta amanhã (meia-noite de Brasília) |
 | Gasto do mês atingiu o teto | Avisa que o limite da fase foi atingido; volta no mês seguinte |
@@ -60,7 +60,7 @@ boas-vindas com um pedido de desculpas pela demora.
 | Variável | Valor atual | Para que serve |
 |---|---|---|
 | `MODO_ACESSO` | `convite` | `aberto` libera para todo mundo |
-| `CONVITES` | `PILOTO30:100` | Código e vagas. Mais vagas: `PILOTO30:150`. Mais de um: `PILOTO30:30,EQUIPE:5` |
+| `CONVITES` | `PILOTO30:40` | Código e vagas. Mais vagas: `PILOTO30:60`. Mais de um: `PILOTO30:30,EQUIPE:5` |
 | `LIMITE_DIARIO_POR_PESSOA` | `20` | `0` = sem limite |
 | `ORCAMENTO_MENSAL_USD` | `15` | Teto do mês com a OpenAI. `0` = sem teto |
 | `ALLOWED_SENDERS` | (vazio) | Números sempre liberados, sem convite (ex.: o seu) |
@@ -84,6 +84,27 @@ Ordem de grandeza (estimativa, ainda não medida): uma pergunta deve sair
 entre US$ 0,005 e US$ 0,01. Trinta pessoas fazendo 3 perguntas por dia
 num mês dão cerca de 2.700 perguntas, entre US$ 15 e US$ 25. Nos primeiros
 dias, compare o painel com a conta da OpenAI e ajuste o teto.
+
+## Não ser bloqueado pelo WhatsApp
+
+O número é comum, ligado ao agente pela Evolution (não oficial). Em
+02/11/2026 o WhatsApp restringiu o número por algumas horas por "atividade
+que pode caracterizar mensagens automáticas ou em massa". Restrições
+repetidas costumam terminar em banimento. Por isso:
+
+- **Crescer devagar.** As vagas voltaram para 40. Suba de 10 em 10, só depois
+  de uma ou duas semanas sem aviso no celular.
+- **O agente digita.** Cada balão mostra "digitando..." por 1 a 6 segundos
+  (`EVOLUTION_DIGITANDO_MAX_MS`), e as boas-vindas saem num balão só.
+- **Pouca mensagem para quem não é testadora:** o aviso de fase fechada sai
+  no máximo uma vez por mês por número.
+- **Liberação manual espaçada:** 20 s entre uma pessoa e outra
+  (`PAUSA_ENTRE_LIBERACOES_S`). Não use durante uma restrição.
+- **Durante uma restrição:** não pareie de novo, não libere números, não
+  divulgue o convite. O agente pode continuar respondendo a quem escreve.
+
+Nada disso garante: número comum com automação sempre corre risco. O caminho
+seguro para crescer é o número oficial (API da Meta).
 
 ## Cuidados
 

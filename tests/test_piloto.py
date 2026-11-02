@@ -212,6 +212,22 @@ class TestPortaoDoConvite:
         assert "20 perguntas por dia" in channel.bodies
         assert "192" in channel.bodies
 
+    def test_boas_vindas_em_um_balao_so(self):
+        """Cada mensagem enviada pesa contra o número no WhatsApp."""
+        pipeline, channel, _, _ = build()
+        pipeline.handle(text_message(CONVITE, "m1"))
+        assert len(channel.sent) == 1
+
+    def test_aviso_a_nao_convidada_no_maximo_uma_vez_por_mes(self):
+        relogio = Relogio(dt.datetime(2026, 11, 2, 9, 0, tzinfo=BRASILIA))
+        pipeline, channel, _, _ = build(relogio=relogio)
+        assert pipeline.handle(text_message("oi", "m1")) == "nao_convidado"
+        relogio.avancar(days=3)
+        assert pipeline.handle(text_message("oi?", "m2")) == "nao_convidado_silencio"
+        relogio.avancar(days=28)
+        assert pipeline.handle(text_message("oi!", "m3")) == "nao_convidado"
+        assert len(channel.sent) == 2
+
     def test_autorizada_conversa_normalmente_sem_repetir_boas_vindas(self):
         pipeline, channel, engine, _ = build()
         pipeline.handle(text_message(CONVITE, "m1"))
@@ -384,6 +400,7 @@ def painel(monkeypatch):
             "VECTOR_STORE_ID": "vs", "DB_PATH": ":memory:",
             "MODO_ACESSO": "convite", "CONVITES": "MAMAE2026:30",
             "NUMERO_WHATSAPP": "+55 21 93618-6344",
+            "PAUSA_ENTRE_LIBERACOES_S": "0",
         }
         base.update(env)
         for nome, valor in base.items():
@@ -461,7 +478,7 @@ class TestLiberacaoManual:
         assert resposta.status_code == 200
         assert "liberado, boas-vindas enviadas" in resposta.text
         assert main.piloto.autorizado("552181814170")
-        assert {para for para, _ in canal.sent} == {"5521981814170"}
+        assert [para for para, _ in canal.sent] == ["5521981814170"]
         assert "Desculpe a demora" in canal.bodies
         assert "192" in canal.bodies
 

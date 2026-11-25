@@ -11,6 +11,7 @@ punir a presença de uma palavra.
 """
 
 import io
+import re
 from dataclasses import dataclass
 
 from openai import OpenAI, OpenAIError
@@ -148,7 +149,7 @@ class AssistantEngine:
             log.exception("erro inesperado ao gerar resposta: %s", exc)
             return Answer(text="", grounded=False, error=True)
 
-        text = (getattr(response, "output_text", "") or "").strip()
+        text = limpar_marcas_de_citacao(getattr(response, "output_text", "") or "")
         entrada, saida = token_usage(response)
 
         motivo = truncation_reason(response)
@@ -226,6 +227,29 @@ def _extension_for(mime: str) -> str:
         "audio/webm": "webm",
     }
     return mapping.get((mime or "").split(";")[0].strip(), "ogg")
+
+
+# Marcas de citação que o modelo às vezes escreve no próprio texto, no
+# formato interno do ChatGPT: "\ue200filecite\ue202turn0file0\ue201", às vezes
+# sem os caracteres invisíveis e com linhas inventadas ("L??-L??"), ou no
+# formato antigo "【4:0†fonte】". Para a mãe, é lixo no meio da frase.
+_MARCA_DE_CITACAO = re.compile(
+    r"[ \t]*(?:"
+    r"[\ue200-\ue2ff]*filecite[\ue200-\ue2ff]*turn\d+file\d+(?:L[\d?]+(?:-L[\d?]+)?)?[\ue200-\ue2ff]*"
+    r"|【[^】]*】"
+    r")"
+)
+_CARACTERE_PRIVADO = re.compile(r"[\ue200-\ue2ff]")
+# A citação real (anotação) não deixa texto, mas o modelo costuma pôr um
+# espaço antes dela: "rachaduras ." Só espaço e tab — quebra de linha fica.
+_ESPACO_ANTES_DA_PONTUACAO = re.compile(r"[ \t]+([.,;:!?)])")
+
+
+def limpar_marcas_de_citacao(texto: str) -> str:
+    texto = _MARCA_DE_CITACAO.sub("", texto)
+    texto = _CARACTERE_PRIVADO.sub("", texto)
+    texto = _ESPACO_ANTES_DA_PONTUACAO.sub(r"\1", texto)
+    return "\n".join(linha.rstrip() for linha in texto.split("\n")).strip()
 
 
 def count_file_citations(response) -> int:

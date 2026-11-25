@@ -153,3 +153,40 @@ class TestUsoDeTokens:
     def test_sem_usage_devolve_zero(self):
         """Zero significa 'não medido', não 'foi de graça'."""
         assert token_usage(object()) == (0, 0)
+
+
+class TestMarcasDeCitacao:
+    """O modelo às vezes escreve a marca de citação no texto, e ela chegava
+    à mãe no WhatsApp: "... (rodilhas) fileciteturn0file0L??-L??."."""
+
+    def limpar(self, texto):
+        from app.llm import limpar_marcas_de_citacao
+
+        return limpar_marcas_de_citacao(texto)
+
+    def test_marca_sem_caracteres_invisiveis(self):
+        assert self.limpar(
+            "use coxins de algodão fileciteturn0file0L??-L??."
+        ) == "use coxins de algodão."
+
+    def test_marca_com_caracteres_invisiveis(self):
+        assert self.limpar(
+            "Verifique a pega fileciteturn0file3."
+        ) == "Verifique a pega."
+
+    def test_formato_antigo(self):
+        assert self.limpar("Ofereça o peito 【4:0†caderneta.pdf】.") == "Ofereça o peito."
+
+    def test_espaco_antes_da_pontuacao(self):
+        assert self.limpar("rachaduras .\nprocure avaliação profissional .") == (
+            "rachaduras.\nprocure avaliação profissional."
+        )
+
+    def test_preserva_listas_e_paragrafos(self):
+        texto = "Dicas:\n\n- Pega correta.\n- Leite no mamilo; deixe secar."
+        assert self.limpar(texto) == texto
+
+    def test_nao_mexe_em_palavras_parecidas(self):
+        assert self.limpar("O arquivo citado (file) e o turno da noite.") == (
+            "O arquivo citado (file) e o turno da noite."
+        )

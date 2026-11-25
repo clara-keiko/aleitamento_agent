@@ -254,3 +254,21 @@ Duas proteções são específicas daqui, e ambas têm teste:
   chegaria de volta como mensagem nova e dispararia a seguinte, para sempre.
 - **Mensagem de grupo é ignorada.** Bot respondendo em grupo é o caminho mais
   curto para denúncia — e denúncia é o que leva a banimento.
+
+## Voltar para o número oficial sem deixar ninguém sem resposta
+
+Com as quatro credenciais da Meta preenchidas (`WHATSAPP_TOKEN`,
+`PHONE_NUMBER_ID`, `VERIFY_TOKEN`, `APP_SECRET`), o agente atende **também**
+pelo número oficial, em `/webhook/meta`, sem desligar a Evolution. O `/health`
+mostra `"meta_paralela": true` e, se faltar algo, `missing_for_meta`.
+
+1. No app da Meta → WhatsApp → Configuração → Webhook: URL de callback
+   `https://SEU-APP.onrender.com/webhook/meta`, token de verificação = o
+   `VERIFY_TOKEN`; assine o campo `messages`.
+2. Troque `NUMERO_WHATSAPP` para o número oficial: o link de convite do painel
+   passa a apontar para ele.
+3. As testadoras já liberadas continuam liberadas no número novo (a
+   autorização é pelo número delas). Avise aos poucos, ou deixe a resposta do
+   número antigo avisar.
+4. Quando ninguém mais usar o número antigo: `WHATSAPP_PROVIDER=meta`,
+   desconecte a Evolution e suspenda `evolution-api` e `evolution-db`.

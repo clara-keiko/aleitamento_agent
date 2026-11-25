@@ -102,7 +102,35 @@ def _status_payload() -> dict:
         "missing_for_web": settings.missing_core(),
         "missing_for_whatsapp": settings.missing(),
         "missing_env": missing,
+        # Via oficial ligada em paralelo em /webhook/meta (ver abaixo).
+        "meta_paralela": canal_meta is not None,
+        "missing_for_meta": _faltando_para_meta(),
     }
+
+
+def _faltando_para_meta() -> list[str]:
+    exigidas = {
+        "WHATSAPP_TOKEN": settings.whatsapp_token,
+        "PHONE_NUMBER_ID": settings.phone_number_id,
+        "VERIFY_TOKEN": settings.verify_token,
+        "APP_SECRET": settings.app_secret,
+    }
+    return sorted(nome for nome, valor in exigidas.items() if not valor)
+
+
+# Via oficial em paralelo. Com a Evolution como canal principal, o número
+# oficial também atende, em /webhook/meta, desde que as credenciais da Meta
+# estejam preenchidas. Assim a troca de número não tem um minuto sequer de
+# LactAI mudo, e ninguém precisa receber aviso em massa: cada testadora passa
+# para o número novo quando quiser. Convites e limites são os mesmos (o
+# registro do piloto é um só, indexado pelo número da testadora).
+if isinstance(channel, MetaCloudChannel):
+    canal_meta, pipeline_meta = channel, pipeline
+elif settings.web_ready and not _faltando_para_meta():
+    canal_meta = MetaCloudChannel(settings)
+    pipeline_meta = MessagePipeline(settings, canal_meta, engine, piloto=piloto)
+else:
+    canal_meta = pipeline_meta = None
 
 
 if settings.provider == PROVIDER_EVOLUTION and settings.ready:
@@ -555,6 +583,51 @@ async def receive_webhook(request: Request, background: BackgroundTasks) -> Resp
     return JSONResponse({"status": "ok"}, status_code=200)
 
 
+@app.get("/webhook/meta", response_class=PlainTextResponse)
+def verificar_webhook_meta(
+    hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
+    hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
+    hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
+):
+    if canal_meta is None:
+        return PlainTextResponse("Not Found", status_code=404)
+    if canal_meta.verify_challenge(hub_mode, hub_verify_token) and hub_challenge:
+        return PlainTextResponse(hub_challenge)
+    log.warning("handshake da Meta recusado em /webhook/meta")
+    return PlainTextResponse("Forbidden", status_code=403)
+
+
+@app.post("/webhook/meta")
+async def receber_webhook_meta(request: Request, background: BackgroundTasks) -> Response:
+    if canal_meta is None:
+        return PlainTextResponse("Not Found", status_code=404)
+
+    raw_body = await request.body()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    if not canal_meta.verify_signature(raw_body, headers, str(request.url)):
+        log.warning(
+            "assinatura inválida em /webhook/meta; descartando (assinaturas=%s)",
+            _assinaturas_presentes(headers) or "nenhuma",
+        )
+        return JSONResponse({"status": "forbidden"}, status_code=403)
+
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except (ValueError, UnicodeDecodeError):
+        return JSONResponse({"status": "ignored"}, status_code=200)
+
+    for message in canal_meta.parse_webhook(payload):
+        background.add_task(_processar_com_seguranca, pipeline_meta, message)
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
+def _processar_com_seguranca(destino: MessagePipeline, message) -> None:
+    try:
+        destino.handle(message)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("falha ao processar mensagem: %s", exc)
+
+
 def _decode_body(raw_body: bytes, headers: dict) -> dict | None:
     content_type = headers.get("content-type", "")
 
@@ -574,7 +647,4 @@ def _decode_body(raw_body: bytes, headers: dict) -> dict | None:
 
 def _safe_handle(message) -> None:
     """Uma exceção aqui roda fora do ciclo da requisição e sumiria calada."""
-    try:
-        pipeline.handle(message)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("falha ao processar mensagem: %s", exc)
+    _processar_com_seguranca(pipeline, message)

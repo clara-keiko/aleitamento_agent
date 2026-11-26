@@ -396,3 +396,15 @@ class TestRemedioIndicaELactancia:
         pipeline.handle(text_message("posso tomar dipirona?", "m1"))
         historico = pipeline.conversations.history("5511999999999")
         assert all("e-lactancia" not in turno["content"] for turno in historico)
+
+
+class TestFonteNoRodape:
+    def test_resposta_traz_a_fonte(self):
+        resposta = Answer(text="Resposta.", grounded=True,
+                          fontes=["amamentacao_uso_medicamentos_outras_substancias_3ed.pdf"])
+        pipeline, channel, _ = build(answer=resposta)
+        pipeline.handle(text_message("posso tomar ibuprofeno amamentando?", "m1"))
+        final = channel.sent[-1][1]
+        assert "📚 _Fonte: Ministério da Saúde" in final
+        # A fonte vem antes da nota do e-Lactancia.
+        assert final.index("Fonte:") < final.index("e-Lactancia")

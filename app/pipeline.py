@@ -284,6 +284,9 @@ class MessagePipeline:
         reply = answer.text
         if risk.needs_safety_note:
             reply += guardrails.safety_note()
+        # Vacina já traz os links do gov.br e da SBIm no próprio texto.
+        if not sobre_vacina:
+            reply += guardrails.sources_footer(getattr(answer, "fontes", []))
         reply += nota_remedio
         if sobre_vacina and consentiu:
             reply += self._sugestao_de_foto(message.sender)

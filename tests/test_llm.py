@@ -190,3 +190,40 @@ class TestMarcasDeCitacao:
         assert self.limpar("O arquivo citado (file) e o turno da noite.") == (
             "O arquivo citado (file) e o turno da noite."
         )
+
+
+class TestFonteNaResposta:
+    def test_nomes_legiveis(self):
+        from app.guardrails import sources_footer
+
+        rodape = sources_footer([
+            "amamentacao_uso_medicamentos_outras_substancias_3ed.pdf",
+            "AppAM_livreDemanda_I.docx",
+            "AppAM_SONOdoBEBE.docx",
+        ])
+        assert "Amamentação e uso de medicamentos e outras substâncias (3ª ed., 2025)" in rodape
+        assert rodape.count("Material educativo AppAM") == 1
+
+    def test_sem_fonte_sem_rodape(self):
+        from app.guardrails import sources_footer
+
+        assert sources_footer([]) == ""
+
+    def test_arquivos_citados_sem_repetir(self):
+        from types import SimpleNamespace
+
+        from app.llm import cited_files
+
+        def cit(nome):
+            return SimpleNamespace(type="file_citation", filename=nome)
+
+        resposta = SimpleNamespace(output=[SimpleNamespace(content=[SimpleNamespace(
+            annotations=[cit("a.pdf"), cit("b.docx"), cit("a.pdf")]
+        )])])
+        assert cited_files(resposta) == ["a.pdf", "b.docx"]
+
+    def test_prompt_nao_diz_sim_para_remedio_nem_oferece_acoes(self):
+        from app.llm import SYSTEM_PROMPT
+
+        assert 'não responda "sim", "pode"' in SYSTEM_PROMPT
+        assert "Não ofereça fazer nada além de responder" in SYSTEM_PROMPT

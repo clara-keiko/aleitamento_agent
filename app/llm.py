@@ -12,7 +12,7 @@ punir a presença de uma palavra.
 
 import io
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openai import OpenAI, OpenAIError
 
@@ -39,13 +39,20 @@ Limites clínicos:
 medicamento. Você pode explicar o que o material diz sobre compatibilidade \
 de substâncias com a amamentação, sempre orientando confirmar com o \
 profissional que acompanha o caso.
+- Em pergunta sobre remédio ("posso tomar X?"), não responda "sim", "pode" \
+ou "não pode". Diga como o material classifica o medicamento (por exemplo, \
+"uso compatível com a amamentação") e que quem indica remédio e dose é o \
+médico.
 - Não substitua avaliação profissional. Diante de sinal de alerta, oriente \
 procurar atendimento.
 
 O que você não faz (nunca prometa nem finja):
 - Você não grava, altera nem apaga dados; não preenche formulários; não \
 avisa equipe, médico ou ninguém; não agenda nada. Nunca diga "registrei", \
-"anotei", "atualizei" ou "vou informar". Quem guarda dados é o próprio \
+"anotei", "atualizei" ou "vou informar".
+- Não ofereça fazer nada além de responder: não ofereça checar, pesquisar \
+ou consultar outras fontes, buscar alternativas, enviar material nem \
+acompanhar depois. Você não tem como fazer isso. Quem guarda dados é o próprio \
 serviço, por comandos: para atualizar o perfil, a pessoa manda PERFIL.
 - Se a mensagem não for uma dúvida (uma informação, um comentário, um \
 agradecimento), responda em uma ou duas linhas, sem puxar outro assunto. \
@@ -131,6 +138,8 @@ class Answer:
     citations: int = 0
     # Buscas na web feitas (só nas perguntas de vacina); cobradas à parte.
     buscas_web: int = 0
+    # Arquivos da base citados, para dizer à pessoa de onde veio a resposta.
+    fontes: list[str] = field(default_factory=list)
 
 
 class AssistantEngine:
@@ -224,12 +233,17 @@ class AssistantEngine:
             )
 
         citacoes = count_file_citations(response)
+        fontes = cited_files(response)
+        # Só o nome dos arquivos, nunca o texto: é a trilha de auditoria de
+        # "qual material embasou esta resposta".
+        log.info("fontes citadas: %s", ", ".join(fontes) or "nenhuma")
         return Answer(
             text=text,
             grounded=citacoes > 0,
             input_tokens=entrada,
             output_tokens=saida,
             citations=citacoes,
+            fontes=fontes,
         )
 
     def answer_vacina(self, user_text: str, history: list[dict] | None = None) -> Answer:
@@ -367,6 +381,17 @@ def _campo(objeto, nome):
     if valor is None and isinstance(objeto, dict):
         valor = objeto.get(nome)
     return valor
+
+
+def cited_files(response) -> list[str]:
+    """Nomes dos arquivos citados, sem repetição, na ordem em que aparecem."""
+    nomes: list[str] = []
+    for anotacao in _anotacoes(response):
+        if _campo(anotacao, "type") == "file_citation":
+            nome = _campo(anotacao, "filename") or _campo(anotacao, "file_id") or ""
+            if nome and nome not in nomes:
+                nomes.append(nome)
+    return nomes
 
 
 def count_url_citations(response, dominios: list[str]) -> int:

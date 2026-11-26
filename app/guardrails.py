@@ -281,6 +281,38 @@ def safety_note() -> str:
     )
 
 
+# Nome legível dos arquivos da base, para a linha de fonte da resposta.
+NOMES_DAS_FONTES = {
+    "amamentacao_uso_medicamentos_outras_substancias": (
+        "Ministério da Saúde — Amamentação e uso de medicamentos e outras "
+        "substâncias (3ª ed., 2025)"
+    ),
+    "amamentacao-bases-cientificas": "Amamentação: bases científicas (4ª ed., 2016)",
+    "caderneta_crianca": "Ministério da Saúde — Caderneta da Criança (7ª ed.)",
+    "vacinas_brasil": "Calendário de vacinação (SBIm/SBP)",
+    "appam_": "Material educativo AppAM",
+}
+
+
+def source_name(arquivo: str) -> str:
+    chave = arquivo.lower()
+    for prefixo, nome in NOMES_DAS_FONTES.items():
+        if chave.startswith(prefixo):
+            return nome
+    return arquivo.rsplit(".", 1)[0].replace("_", " ")
+
+
+def sources_footer(arquivos: list[str]) -> str:
+    nomes: list[str] = []
+    for arquivo in arquivos:
+        nome = source_name(arquivo)
+        if nome not in nomes:
+            nomes.append(nome)
+    if not nomes:
+        return ""
+    return "\n\n📚 _Fonte: " + "; ".join(nomes) + "_"
+
+
 def elactancia_note() -> str:
     return (
         "\n\n💊 Para conferir se um medicamento é compatível com a amamentação, "

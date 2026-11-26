@@ -33,12 +33,12 @@ página parece de terceiro; com ele, a hospedagem vira informação declarada.
 
 ## Antes de publicar
 
-1. **Troque o e-mail de contato** se `contato@watanabeaitech.com.br` não estiver ativo
+1. **Troque o e-mail de contato** se `clara@watanabeaitech.com` não estiver ativo
    — o revisor pode escrever
 2. **Botões** — o do WhatsApp aponta para o número do LactAI
    (`+55 21 92368-1754`), já com "Oi, LactAI" escrito para a mãe só tocar em
    enviar. "Assinar" e "Falar com a gente" abrem e-mail para
-   `contato@watanabeaitech.com.br` enquanto não houver checkout; confirme que
+   `clara@watanabeaitech.com` enquanto não houver checkout; confirme que
    essa caixa recebe
 3. **Publique os links** de Privacidade e Termos, ou remova-os do rodapé enquanto
    não existirem
@@ -61,7 +61,7 @@ certificado.
 
 1. **Portfólio empresarial** → Configurações do negócio → *Informações da empresa* →
    campo **Site** → `https://aleitamento.com.br/lactai/`
-2. **Publique a outra ponta**: uma menção ao LactAI em `watanabeaitech.com.br`, com
+2. **Publique a outra ponta**: uma menção ao LactAI em `watanabeaitech.com`, com
    link para esta página. A Meta pede que a relação esteja clara **nos sites das duas
    partes** quando o nome de exibição difere da razão social. Esta é a metade que
    ainda falta — e é a mais fácil das duas, porque o domínio é seu.
@@ -69,7 +69,7 @@ certificado.
 
 Não dá para verificar `aleitamento.com.br` no seu portfólio (*Segurança da marca →
 Domínios*) se ele já estiver verificado em outro — um domínio pertence a um portfólio
-só. `watanabeaitech.com.br`, esse sim, vale verificar: é o domínio que sustenta a
+só. `watanabeaitech.com`, esse sim, vale verificar: é o domínio que sustenta a
 afirmação do rodapé.
 
 ## Sobre os preços

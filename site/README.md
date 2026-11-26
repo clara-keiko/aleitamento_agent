@@ -12,7 +12,7 @@ python3 -m http.server 8080 --directory site
 
 1. **Ligue o botão do WhatsApp** — `href="https://wa.me/55DDDNUMERO"` precisa do
    número real
-2. **Confirme que `contato@watanabeaitech.com.br` recebe** — é o único canal de
+2. **Confirme que `clara@watanabeaitech.com` recebe** — é o único canal de
    entrada além do WhatsApp
 3. **Peça autorização ao cliente** antes de manter a seção do LactAI. Citar cliente
    pelo nome sem combinar é o tipo de coisa que custa a relação — e a seção sai com

@@ -169,16 +169,19 @@ class MessagePipeline:
         # se o banco estiver fora (aí segue com a memória curta).
         consentiu = self._na_memoria("decisao", message.sender) if self._memoria_ligada else None
 
-        # Primeiro contato: escopo, aviso de automação e canal de emergência.
-        if self.known_users.is_first_contact(message.sender):
-            self.channel.send_text(
-                message.sender,
-                guardrails.welcome_message() + self._pergunta_de_memoria(message.sender),
-            )
-
         # Triagem clínica antes de tudo: "oi, meu bebê não respira" é
         # emergência, não saudação.
         risk = guardrails.classify_risk(text)
+
+        # Primeiro contato: escopo, aviso de automação, canal de emergência e
+        # a pergunta de guarda. Em emergência a pergunta fica para depois:
+        # nada pode competir com o 192.
+        if self.known_users.is_first_contact(message.sender):
+            pergunta = (
+                "" if risk.level == guardrails.EMERGENCY_NOW
+                else self._pergunta_de_memoria(message.sender)
+            )
+            self.channel.send_text(message.sender, guardrails.welcome_message() + pergunta)
 
         if risk.level == guardrails.EMERGENCY_NOW:
             self.channel.send_text(message.sender, guardrails.emergency_message())

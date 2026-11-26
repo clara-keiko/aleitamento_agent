@@ -284,3 +284,40 @@ class TestNoPipeline:
         pipeline, channel, _ = montar(quebrada)
         assert pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO)) == "respondido"
         assert "Resposta educativa." in channel.bodies
+
+
+class TestNovaClienteComecaPelaPergunta:
+    def test_primeira_mensagem_ja_traz_a_pergunta_antes_da_resposta(self, memoria):
+        pipeline, channel, _ = montar(memoria)
+        pipeline.handle(text_message("oi", "m1", NUMERO))
+        primeira = channel.sent[0][1]
+        assert "assistente educativo" in primeira
+        assert "Posso guardar nossas conversas?" in primeira
+
+    def test_resposta_da_primeira_pergunta_nao_e_guardada_sem_o_1(self, memoria):
+        pipeline, _, _ = montar(memoria)
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        assert not memoria.tem_dados(NUMERO)
+
+    def test_convite_do_piloto_ja_traz_a_pergunta(self, memoria):
+        from app.piloto import RegistroDoPiloto, ler_convites
+
+        settings = Settings(
+            openai_api_key="k", vector_store_id="vs", memoria_ativa=True,
+            modo_acesso="convite",
+        )
+        channel = FakeChannel()
+        piloto = RegistroDoPiloto(":memory:", ler_convites("PILOTO30:40"))
+        pipeline = MessagePipeline(settings, channel, FakeEngine(), piloto=piloto, memoria=memoria)
+        frase = "Quero participar da fase de testes do LactAI PILOTO30"
+        assert pipeline.handle(text_message(frase, "m1", NUMERO)) == "convite_aceito"
+        assert "Posso guardar nossas conversas?" in channel.sent[0][1]
+
+    def test_emergencia_na_primeira_mensagem_nao_mistura_a_pergunta(self, memoria):
+        pipeline, channel, _ = montar(memoria)
+        assert pipeline.handle(text_message("meu bebê não está respirando", "m1", NUMERO)) == "emergencia"
+        assert "Posso guardar" not in channel.bodies
+        assert "192" in channel.sent[-1][1]
+        # Na próxima resposta comum, a pergunta aparece.
+        pipeline.handle(text_message("como melhorar a pega?", "m2", NUMERO))
+        assert "Posso guardar" in channel.sent[-1][1]

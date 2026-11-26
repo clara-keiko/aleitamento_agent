@@ -83,7 +83,7 @@ Perguntas, cada uma num momento:
 | `MEUS DADOS` | Recebe tudo o que está guardado: perfil, diário do bebê, lembretes, consentimentos |
 | `CORRIGIR` | Corrige um dado: grava a correção **como novo registro**, e o errado fica marcado como substituído |
 | `PARAR LEMBRETES` | Revoga só `lembretes` |
-| `APAGAR` / `SAIR` | Apaga **tudo** na hora. Fica só a prova do consentimento e da revogação, sem conteúdo |
+| `APAGAR` / `SAIR` | Pede `CONFIRMAR` (vale 15 min) e então apaga **tudo**. Fica só a prova do consentimento e da revogação, sem conteúdo |
 | e-mail ao encarregado(a) | Cópia completa (portabilidade) e demais pedidos |
 
 ### 2.4 Segurança (art. 46)
@@ -381,7 +381,7 @@ permitam uso automatizado num produto pago.
 
 | Fase | Entrega |
 |---|---|
-| **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR` — **feito, desligado até a política nova** (`MEMORIA_ATIVA`) |
+| **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR` com `CONFIRMAR` — **no ar** |
 | **2. Memória** | Conversa guardada e usada como histórico — **feito**; resumo e perfil no prompt — a fazer |
 | **3. Diário do bebê** | Nascimento, sexo, relação, idade da mãe, peso/altura/aleitamento acumulativos, confirmação antes de gravar, perguntas respondidas pelo diário |
 | **4. Vacinas** | Calendário, pergunta de lembretes, modelo na Meta, agendador, `PARAR LEMBRETES` |

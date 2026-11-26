@@ -348,6 +348,13 @@ def is_delete_command(text: str) -> bool:
     return normalize(text).strip(" .!") in DELETE_KEYWORDS
 
 
+CONFIRM_KEYWORDS = {"confirmar", "confirmo", "pode apagar", "sim, apagar", "sim apagar"}
+
+
+def is_confirmation(text: str) -> bool:
+    return normalize(text).strip(" .!") in CONFIRM_KEYWORDS
+
+
 def is_my_data_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
 
@@ -370,11 +377,16 @@ def memory_consent_question() -> str:
     """
     return (
         "📒 *Posso guardar nossas conversas?*\n\n"
-        "Assim eu lembro do que você já me contou sobre você e o bebê, e não "
-        "precisa repetir. Isso inclui informações de saúde, que ficam "
-        "protegidas e servem só para te atender.\n\n"
-        "Se você passar 1 ano sem conversar comigo, sua conta fica inativa e é "
-        "apagada 2 anos depois. Para apagar tudo na hora, mande *APAGAR*.\n\n"
+        "Com isso, eu consigo te ajudar melhor:\n"
+        "• lembro do que você já me contou, sem você precisar repetir;\n"
+        "• levo em conta a idade do bebê, como ele mama e o que já aconteceu, "
+        "e a resposta fica mais certeira para o seu caso.\n\n"
+        "Se preferir não guardar, *tudo bem*: continuo respondendo suas "
+        "dúvidas do mesmo jeito, só não lembro de uma conversa para a outra.\n\n"
+        "O que fica guardado inclui informações de saúde, protegidas e usadas "
+        "só para te atender. Se você passar 1 ano sem conversar comigo, sua "
+        "conta fica inativa e é apagada 2 anos depois. Para apagar antes, "
+        "mande *APAGAR*.\n\n"
         "*1* – Pode guardar\n"
         "*2* – Não guarde"
     )
@@ -396,9 +408,10 @@ def memory_consent_no_message() -> str:
 
 def delete_confirmation_request() -> str:
     return (
-        "Você quer sair e apagar tudo o que eu guardei (nossas conversas e as "
-        "informações do bebê)? Isso não pode ser desfeito.\n\n"
-        "Para confirmar, mande *APAGAR*."
+        "Tem certeza? Isso apaga *tudo* o que eu guardei — nossas conversas e "
+        "as informações do bebê — e não pode ser desfeito.\n\n"
+        "Para confirmar, mande *CONFIRMAR*. Se mudou de ideia, é só continuar "
+        "conversando normalmente."
     )
 
 

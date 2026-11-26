@@ -126,9 +126,10 @@ services:
       # de senhas.
       - key: CHAVE_DADOS
         generateValue: true
-      # Só "true" depois da política de privacidade nova publicada.
+      # Ligada em 27/11/2026, com a política de privacidade nova publicada.
+      # "false" volta à memória curta sem apagar o que já foi guardado.
       - key: MEMORIA_ATIVA
-        value: "false"
+        value: "true"
 
 databases:
   # Memória do cuidador(a) e diário do bebê. Plano pago: backup diário.

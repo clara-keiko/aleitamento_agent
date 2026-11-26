@@ -182,14 +182,49 @@ class TestNoPipeline:
         pipeline, _, _ = montar(memoria)
         assert pipeline.handle(text_message("GUARDAR", "m1", NUMERO)) == "memoria_aceita"
 
-    def test_sair_com_dados_pede_confirmacao_e_apagar_apaga(self, memoria):
+    @pytest.mark.parametrize("pedido,confirmacao", [
+        ("sair", "CONFIRMAR"),
+        ("APAGAR", "confirmar"),
+        ("apagar tudo", "APAGAR"),
+    ])
+    def test_apagar_so_depois_de_confirmar(self, memoria, pedido, confirmacao):
         memoria.decidir(NUMERO, True, "wamid.0")
         memoria.registrar_troca(NUMERO, "p", "r")
         pipeline, channel, _ = montar(memoria)
-        assert pipeline.handle(text_message("sair", "m1", NUMERO)) == "pedido_de_exclusao"
+        assert pipeline.handle(text_message(pedido, "m1", NUMERO)) == "pedido_de_exclusao"
         assert memoria.tem_dados(NUMERO)
-        assert pipeline.handle(text_message("APAGAR", "m2", NUMERO)) == "apagou_tudo"
+        assert "CONFIRMAR" in channel.sent[-1][1]
+        assert pipeline.handle(text_message(confirmacao, "m2", NUMERO)) == "apagou_tudo"
         assert not memoria.tem_dados(NUMERO)
+
+    def test_confirmar_sem_pedido_nao_apaga(self, memoria):
+        memoria.decidir(NUMERO, True, "wamid.0")
+        memoria.registrar_troca(NUMERO, "p", "r")
+        pipeline, _, _ = montar(memoria)
+        pipeline.handle(text_message("confirmar", "m1", NUMERO))
+        assert memoria.tem_dados(NUMERO)
+
+    def test_pedido_expira(self, memoria, monkeypatch):
+        import app.pipeline as modulo
+
+        memoria.decidir(NUMERO, True, "wamid.0")
+        memoria.registrar_troca(NUMERO, "p", "r")
+        pipeline, _, _ = montar(memoria)
+        pipeline.handle(text_message("APAGAR", "m1", NUMERO))
+        monkeypatch.setattr(modulo, "CONFIRMACAO_VALE_S", 0)
+        assert pipeline.handle(text_message("confirmar", "m2", NUMERO)) != "apagou_tudo"
+        assert memoria.tem_dados(NUMERO)
+
+    def test_sem_dados_guardados_apagar_e_imediato(self, memoria):
+        pipeline, _, _ = montar(memoria)
+        assert pipeline.handle(text_message("APAGAR", "m1", NUMERO)) == "apagou_tudo"
+
+    def test_pergunta_explica_a_vantagem_e_que_nao_e_obrigatorio(self):
+        from app import guardrails
+
+        texto = guardrails.memory_consent_question()
+        assert "ajudar melhor" in texto
+        assert "tudo bem" in texto
 
     def test_meus_dados(self, memoria):
         memoria.decidir(NUMERO, True, "wamid.0")

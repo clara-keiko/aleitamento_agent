@@ -24,6 +24,9 @@ from app.piloto import (
 
 log = get_logger(__name__)
 
+# Por quanto tempo um pedido de exclusão espera o CONFIRMAR.
+CONFIRMACAO_VALE_S = 15 * 60
+
 
 def variantes_do_numero(numero: str) -> set[str]:
     """Formas equivalentes de um mesmo telefone.
@@ -86,6 +89,8 @@ class MessagePipeline:
         # respondeu. Evita perguntar a cada mensagem; depois de um reinício,
         # pergunta de novo uma vez, o que é aceitável.
         self._perguntados: set[str] = set()
+        # Pedidos de exclusão esperando CONFIRMAR: número -> quando pediu.
+        self._exclusoes_pendentes: dict[str, float] = {}
 
     @property
     def _memoria_ligada(self) -> bool:
@@ -261,22 +266,29 @@ class MessagePipeline:
     def _direitos_da_titular(self, message: IncomingMessage, text: str) -> str | None:
         sender = message.sender
 
-        if guardrails.is_delete_command(text):
-            if self._memoria_ligada:
-                self._na_memoria("apagar_tudo", sender)
+        # Apagar é irreversível: com dados guardados, só depois de CONFIRMAR.
+        pediu_antes = time.monotonic() - self._exclusoes_pendentes.get(sender, -1e9)
+        if pediu_antes < CONFIRMACAO_VALE_S and (
+            guardrails.is_confirmation(text) or guardrails.is_delete_command(text)
+        ):
+            self._exclusoes_pendentes.pop(sender, None)
+            self._na_memoria("apagar_tudo", sender)
             self._forget(sender)
             self.channel.send_text(sender, guardrails.deleted_message())
             return "apagou_tudo"
 
-        if guardrails.is_opt_out(text):
-            # Com dados guardados, "sair" apagaria meses de diário do bebê:
-            # pede a confirmação explícita antes.
+        apagar = guardrails.is_delete_command(text)
+        if apagar or guardrails.is_opt_out(text):
             if self._memoria_ligada and self._na_memoria("tem_dados", sender, padrao=False):
+                self._exclusoes_pendentes[sender] = time.monotonic()
                 self.channel.send_text(sender, guardrails.delete_confirmation_request())
                 return "pedido_de_exclusao"
+            # Nada guardado: só a memória curta, que se perde de qualquer jeito.
             self._forget(sender)
-            self.channel.send_text(sender, guardrails.opt_out_message())
-            return "opt_out"
+            self.channel.send_text(
+                sender, guardrails.deleted_message() if apagar else guardrails.opt_out_message()
+            )
+            return "apagou_tudo" if apagar else "opt_out"
 
         if guardrails.is_my_data_command(text):
             dados = self._na_memoria("meus_dados", sender, padrao={}) if self._memoria_ligada else {}

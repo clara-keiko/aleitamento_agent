@@ -177,6 +177,27 @@ def is_small_talk(text: str) -> bool:
     return bool(_ONLY_SOCIAL.match(normalized))
 
 
+# Pergunta sobre medicamento (ou outra substância) na amamentação. Não muda a
+# triagem: só acrescenta à resposta a indicação do e-Lactancia.
+MEDICATION_PATTERNS = [
+    r"\bremedi\w*",
+    r"\bmedica(mento|cao|coes)\w*",
+    r"\b(antibiotic|anti-?inflamatori|anticoncepciona|analgesic|antidepressiv"
+    r"|antialergic|antitermic|ansiolitic|corticoide)\w*",
+    r"\b(pilula|comprimido|xarope|pomada)s?\b",
+    r"\bposso (tomar|usar)\b(?! (banho|sol)\b)",
+    r"\bcompativel com (a )?(amamentacao|amamentar|aleitamento)\b",
+    r"\b(dipirona|novalgina|paracetamol|tylenol|ibuprofeno|nimesulida|diclofenaco"
+    r"|cetoprofeno|dorflex|buscopan|amoxicilina|azitromicina|cefalexina|omeprazol"
+    r"|loratadina|desloratadina|prednisona|sertralina|fluoxetina|escitalopram"
+    r"|domperidona|levotiroxina|metformina)\b",
+]
+
+
+def is_medication_question(text: str) -> bool:
+    return _matches(MEDICATION_PATTERNS, normalize(text))
+
+
 @dataclass(frozen=True)
 class RiskAssessment:
     level: str
@@ -232,6 +253,15 @@ def safety_note() -> str:
     return (
         "\n\n⚠️ Isso vale como informação geral. Se estiver acontecendo com "
         "você ou com o bebê agora, procure avaliação de um profissional de saúde."
+    )
+
+
+def elactancia_note() -> str:
+    return (
+        "\n\n💊 Para conferir se um medicamento é compatível com a amamentação, "
+        "consulte também o *e-Lactancia* (www.e-lactancia.org), referência "
+        "gratuita mantida por especialistas, em espanhol e inglês. Antes de "
+        "tomar qualquer remédio, confirme com seu médico."
     )
 
 

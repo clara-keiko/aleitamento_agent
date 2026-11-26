@@ -368,3 +368,26 @@ class TestListaDePermitidos:
                             text="qual a pega correta?")
         )
         assert resultado != "fora_da_lista"
+
+
+class TestRemedioIndicaELactancia:
+    def test_resposta_sobre_remedio_indica_o_site(self):
+        pipeline, channel, _ = build()
+        pipeline.handle(text_message("posso tomar dipirona amamentando?", "m1"))
+        assert "e-lactancia.org" in channel.sent[-1][1]
+
+    def test_sem_resposta_na_base_tambem_indica(self):
+        pipeline, channel, _ = build(answer=Answer(text="x", grounded=False))
+        assert pipeline.handle(text_message("posso tomar sertralina?", "m1")) == "fora_de_escopo"
+        assert "e-lactancia.org" in channel.sent[-1][1]
+
+    def test_pergunta_comum_nao_indica(self):
+        pipeline, channel, _ = build()
+        pipeline.handle(text_message("como melhorar a pega?", "m1"))
+        assert "e-lactancia" not in channel.bodies
+
+    def test_historico_guarda_so_a_resposta(self):
+        pipeline, _, _ = build()
+        pipeline.handle(text_message("posso tomar dipirona?", "m1"))
+        historico = pipeline.conversations.history("5511999999999")
+        assert all("e-lactancia" not in turno["content"] for turno in historico)

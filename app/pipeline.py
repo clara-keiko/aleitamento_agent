@@ -175,13 +175,21 @@ class MessagePipeline:
             self.channel.send_text(message.sender, fallback_message())
             return "erro_modelo"
 
+        # Remédio na amamentação: a base pode não ter o medicamento, e o
+        # e-Lactancia tem quase todos. Vai junto até da resposta "não achei".
+        sobre_remedio = guardrails.is_medication_question(text)
+        nota_remedio = guardrails.elactancia_note() if sobre_remedio else ""
+
         if not answer.grounded:
-            self.channel.send_text(message.sender, guardrails.out_of_scope_message())
+            self.channel.send_text(
+                message.sender, guardrails.out_of_scope_message() + nota_remedio
+            )
             return "fora_de_escopo"
 
         reply = answer.text
         if risk.needs_safety_note:
             reply += guardrails.safety_note()
+        reply += nota_remedio
 
         # Só guardamos no histórico o que foi efetivamente entregue.
         self.conversations.append(message.sender, "user", text)

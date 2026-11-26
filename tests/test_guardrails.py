@@ -112,3 +112,30 @@ class TestNomeDoServicoECumprimento:
     ])
     def test_pergunta_que_cita_o_nome_continua_pergunta(self, texto):
         assert not guardrails.is_small_talk(texto)
+
+
+class TestPerguntaSobreRemedio:
+    @pytest.mark.parametrize("texto", [
+        "posso tomar dipirona amamentando?",
+        "Qual remédio para dor de cabeça posso usar?",
+        "antibiótico passa para o leite?",
+        "o anticoncepcional diminui o leite?",
+        "Ibuprofeno é compatível com a amamentação?",
+        "posso usar pomada no mamilo?",
+    ])
+    def test_reconhece(self, texto):
+        assert guardrails.is_medication_question(texto)
+
+    @pytest.mark.parametrize("texto", [
+        "como melhorar a pega?",
+        "posso tomar banho logo depois de amamentar?",
+        "posso tomar sol com o bebê?",
+        "quantas vezes por dia o bebê mama?",
+    ])
+    def test_nao_confunde(self, texto):
+        assert not guardrails.is_medication_question(texto)
+
+    def test_nota_indica_o_site_e_o_medico(self):
+        nota = guardrails.elactancia_note()
+        assert "e-lactancia.org" in nota
+        assert "médico" in nota

@@ -264,6 +264,7 @@ CREATE TABLE acessos_da_equipe (
 
 -- Consultas ao e-Lactancia: cache do nível de risco por medicamento.
 -- Não é dado pessoal (não guarda quem perguntou).
+-- (Só se a consulta automática for autorizada; ver seção 7.)
 CREATE TABLE elactancia_cache (
   termo        text PRIMARY KEY,                 -- 'ibuprofeno', normalizado
   produto      text,                             -- nome no e-Lactancia
@@ -356,26 +357,15 @@ não do modelo.
 
 ## 7. Medicamento e amamentação (e-Lactancia)
 
-Fluxo para "posso tomar X amamentando?":
+**Decidido em 26/11/2026: só indicar o site, sem consulta automática.**
+Quando a pergunta é sobre remédio ou outra substância na amamentação
+(`guardrails.is_medication_question`), a resposta da base sai como sempre e
+ganha no fim a indicação do e-Lactancia (www.e-lactancia.org) e de confirmar
+com o médico. Vale também quando a base não tem a resposta. **Já no ar.**
 
-1. A resposta sai da base, como hoje (inclui o material de e-Lactancia já
-   presente na base) e com os avisos de segurança.
-2. Em seguida, o LactAI consulta o e-Lactancia pelo nome do medicamento e
-   acrescenta: **"No e-Lactancia, ibuprofeno aparece como *risco muito
-   baixo*. Detalhes: <link>"**.
-3. Se não achar o medicamento, ou o site não responder, a resposta da base sai
-   sozinha. Nunca bloqueia nem atrasa a resposta principal.
-4. Resultado guardado em `elactancia_cache` por 30 dias.
-
-⚠️ **Pendência antes de implementar:** o e-Lactancia (mantido pela APILAM,
-associação sem fins lucrativos) **não tem API pública documentada**, e não
-achei os termos de uso que permitam consulta automática num produto pago.
-Caminhos, do mais seguro ao menos:
-
-- **Pedir autorização à APILAM** (apilam.es@gmail.com) para consulta
-  automática, explicando o uso. É o recomendado.
-- Enquanto isso, **só o link**: a resposta traz o link de busca do
-  e-Lactancia para a pessoa conferir lá, sem o LactAI ler o site.
+Consulta automática do nível de risco fica para depois, e só com autorização
+da APILAM (apilam.es@gmail.com): o site não tem API pública nem termos que
+permitam uso automatizado num produto pago.
 
 ---
 
@@ -387,7 +377,7 @@ Caminhos, do mais seguro ao menos:
 | **2. Memória** | Conversa guardada, resumo, perfil no prompt |
 | **3. Diário do bebê** | Nascimento, sexo, relação, idade da mãe, peso/altura/aleitamento acumulativos, confirmação antes de gravar, perguntas respondidas pelo diário |
 | **4. Vacinas** | Calendário, pergunta de lembretes, modelo na Meta, agendador, `PARAR LEMBRETES` |
-| **5. e-Lactancia** | Link na resposta (já); consulta do risco depois da autorização |
+| **5. e-Lactancia** | Indicação do site nas perguntas sobre remédio — **feito** |
 
 As testadoras atuais recebem a pergunta de consentimento na próxima mensagem;
 até responderem, o atendimento segue como hoje.

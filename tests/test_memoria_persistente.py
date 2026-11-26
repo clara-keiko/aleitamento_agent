@@ -226,6 +226,17 @@ class TestNoPipeline:
         assert pipeline.handle(text_message(confirmacao, "m2", NUMERO)) == "apagou_tudo"
         assert not memoria.tem_dados(NUMERO)
 
+    def test_so_autorizou_tambem_confirma_e_apagar_revoga(self, memoria):
+        """O teste real: GUARDAR + 1, nenhuma conversa ainda, depois APAGAR."""
+        memoria.decidir(NUMERO, True, "wamid.0")
+        assert not memoria.tem_dados(NUMERO)
+        pipeline, channel, _ = montar(memoria)
+        assert pipeline.handle(text_message("APAGAR", "m1", NUMERO)) == "pedido_de_exclusao"
+        assert "CONFIRMAR" in channel.sent[-1][1]
+        assert memoria.decisao(NUMERO) is True
+        assert pipeline.handle(text_message("CONFIRMAR", "m2", NUMERO)) == "apagou_tudo"
+        assert memoria.decisao(NUMERO) is False
+
     def test_confirmar_sem_pedido_nao_apaga(self, memoria):
         memoria.decidir(NUMERO, True, "wamid.0")
         memoria.registrar_troca(NUMERO, "p", "r")

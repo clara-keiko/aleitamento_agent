@@ -279,11 +279,21 @@ class MessagePipeline:
 
         apagar = guardrails.is_delete_command(text)
         if apagar or guardrails.is_opt_out(text):
-            if self._memoria_ligada and self._na_memoria("tem_dados", sender, padrao=False):
+            # Há o que perder se há conversa guardada ou autorização ativa:
+            # quem só disse "pode guardar" também precisa confirmar, e a
+            # exclusão tem de revogar essa autorização.
+            if self._memoria_ligada and (
+                self._na_memoria("tem_dados", sender, padrao=False)
+                or self._na_memoria("decisao", sender)
+            ):
                 self._exclusoes_pendentes[sender] = time.monotonic()
                 self.channel.send_text(sender, guardrails.delete_confirmation_request())
                 return "pedido_de_exclusao"
-            # Nada guardado: só a memória curta, que se perde de qualquer jeito.
+            # Nada guardado nem autorizado: só a memória curta, que se perde de
+            # qualquer jeito. Ainda assim passa pelo banco, que é idempotente:
+            # se a leitura acima falhou, a exclusão não pode ficar pela metade.
+            if self._memoria_ligada:
+                self._na_memoria("apagar_tudo", sender)
             self._forget(sender)
             self.channel.send_text(
                 sender, guardrails.deleted_message() if apagar else guardrails.opt_out_message()

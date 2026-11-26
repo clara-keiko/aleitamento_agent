@@ -73,16 +73,20 @@ Forma:
 # pergunta de vacina não usa a base e busca direto no Ministério da Saúde
 # (o que o SUS oferece) e na SBIm (o que a rede particular oferece).
 DOMINIOS_VACINA = ["www.gov.br", "sbim.org.br"]
+PAGINA_SUS = "https://www.gov.br/saude/pt-br/vacinacao/calendario"
 
 VACINA_PROMPT = """\
 Você responde dúvidas sobre vacinação de bebês, crianças e gestantes, \
 dentro de um serviço de apoio materno-infantil.
 
 Fontes:
-- Use SOMENTE a busca na web, que está limitada ao site do Ministério da \
-Saúde (gov.br/saude) e ao da SBIm (sbim.org.br). Sempre busque antes de \
-responder. Não use nenhum outro conhecimento: calendários mudam, e só vale \
-o que está publicado nesses sites agora. Prefira a versão mais recente.
+- SUS: quando houver uma mensagem com o "Calendário Nacional de Vacinação \
+(SUS)" copiado do site do Ministério da Saúde, a parte do SUS sai SOMENTE \
+dela, citando o link que vem junto. Sem essa mensagem, busque no gov.br.
+- Rede particular: busque na web, que está limitada ao site da SBIm \
+(sbim.org.br) e ao do Ministério da Saúde. Sempre busque antes de responder.
+- Não use nenhum outro conhecimento: calendários mudam, e só vale o que está \
+publicado nesses sites agora. Prefira a versão mais recente.
 
 Estrutura (sempre, nesta ordem):
 *No SUS (gratuito):* o que o Calendário Nacional de Vacinação do Ministério \
@@ -246,9 +250,21 @@ class AssistantEngine:
             fontes=fontes,
         )
 
+    # Preenchido pelo main com o calendário baixado do gov.br (ver
+    # app/calendario_sus.py). None: a parte do SUS também vem da busca.
+    calendario_sus = None
+
     def answer_vacina(self, user_text: str, history: list[dict] | None = None) -> Answer:
-        """Pergunta de vacina: busca na hora no gov.br e na SBIm, sem a base."""
+        """Pergunta de vacina: SUS pelo calendário oficial baixado do gov.br,
+        particular pela busca na SBIm; nunca pela base."""
         messages = [{"role": "system", "content": VACINA_PROMPT}]
+        calendario = self.calendario_sus.atual if self.calendario_sus else None
+        if calendario:
+            messages.append({"role": "system", "content": (
+                "Calendário Nacional de Vacinação (SUS), copiado do site do Ministério "
+                f"da Saúde em {calendario.baixado_em:%d/%m/%Y}. Link para citar: "
+                f"{PAGINA_SUS}\n\n{calendario.texto}"
+            )})
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
         parametros = {
@@ -270,7 +286,9 @@ class AssistantEngine:
         fontes = count_url_citations(response, DOMINIOS_VACINA)
         return Answer(
             text=text,
-            grounded=bool(text) and fontes > 0,
+            # Com o calendário oficial no contexto, a parte do SUS já tem
+            # fonte, mesmo que a busca da SBIm não cite nada.
+            grounded=bool(text) and (fontes > 0 or calendario is not None),
             error=not text,
             input_tokens=entrada,
             output_tokens=saida,

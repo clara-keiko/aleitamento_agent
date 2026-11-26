@@ -13,6 +13,7 @@ import html
 import json
 import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Annotated
@@ -21,6 +22,7 @@ from urllib.parse import parse_qs, parse_qsl, quote, urlencode, urlparse
 from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
+from app.calendario_sus import CalendarioSUS
 from app.channels import build_channel
 from app.channels.meta_cloud import MetaCloudChannel
 from app.channels.web import WebChannel
@@ -48,6 +50,8 @@ app = FastAPI(title="Agente de Aleitamento", version="2.1.0")
 
 channel = build_channel(settings)
 engine = AssistantEngine(settings)
+# Calendário do SUS baixado do gov.br; atualizado uma vez por dia (abaixo).
+engine.calendario_sus = CalendarioSUS()
 
 
 def _abrir_registro() -> RegistroDoPiloto:
@@ -153,6 +157,25 @@ elif settings.web_ready and not _faltando_para_meta():
     pipeline_meta = MessagePipeline(settings, canal_meta, engine, piloto=piloto, memoria=memoria)
 else:
     canal_meta = pipeline_meta = None
+
+
+# Primeira carga logo depois de subir, depois a cada 24 h. Falha mantém o
+# calendário anterior; sem nenhum, a resposta de vacina busca na web.
+atualizador_do_calendario = TarefaPeriodica(
+    "calendario-sus", engine.calendario_sus.atualizar, intervalo_s=24 * 3600
+)
+
+
+@app.on_event("startup")
+def _ligar_calendario() -> None:
+    if settings.web_ready and settings.calendario_sus_ativo:
+        threading.Thread(target=engine.calendario_sus.atualizar, daemon=True).start()
+        atualizador_do_calendario.iniciar()
+
+
+@app.on_event("shutdown")
+def _desligar_calendario() -> None:
+    atualizador_do_calendario.parar()
 
 
 if memoria is not None:

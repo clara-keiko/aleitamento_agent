@@ -189,6 +189,10 @@ class Settings:
     custo_busca_usd: float = field(
         default_factory=lambda: _env_float("CUSTO_BUSCA_USD", 0.0025)
     )
+    # Baixar o calendário do SUS do gov.br (ver app/calendario_sus.py).
+    calendario_sus_ativo: bool = field(
+        default_factory=lambda: _env_bool("CALENDARIO_SUS_ATIVO", True)
+    )
     # Busca na web das perguntas de vacina (web_search): US$ 10 por mil.
     custo_busca_web_usd: float = field(
         default_factory=lambda: _env_float("CUSTO_BUSCA_WEB_USD", 0.01)

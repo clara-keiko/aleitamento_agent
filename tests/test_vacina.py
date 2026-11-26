@@ -50,7 +50,8 @@ class TestPrompt:
         assert VACINA_PROMPT.index("No SUS (gratuito)") < VACINA_PROMPT.index("Na rede particular")
 
     def test_ignora_a_base_e_usa_so_os_sites(self):
-        assert "gov.br/saude" in VACINA_PROMPT and "sbim.org.br" in VACINA_PROMPT
+        assert "Calendário Nacional de Vacinação" in VACINA_PROMPT
+        assert "sbim.org.br" in VACINA_PROMPT
         assert "Não use nenhum outro conhecimento" in VACINA_PROMPT
 
 
@@ -170,3 +171,83 @@ class TestSugestaoDaFoto:
         pipeline, channel = self.montar(memoria)
         pipeline.handle(text_message("quais vacinas aos 2 meses?", "m1", NUMERO))
         assert "📷" not in channel.sent[-1][1]
+
+
+class TestCalendarioSUS:
+    PDF_FALSO = None
+
+    def resposta(self, texto="", tipo="text/html", status=200, conteudo=None):
+        import requests
+
+        r = SimpleNamespace(
+            status_code=status, text=texto, headers={"content-type": tipo},
+            content=conteudo if conteudo is not None else texto.encode(),
+        )
+
+        def raise_for_status():
+            if status >= 400:
+                raise requests.HTTPError(str(status))
+
+        r.raise_for_status = raise_for_status
+        return r
+
+    def test_extrai_texto_do_html_e_guarda_a_fonte(self):
+        from app.calendario_sus import baixar
+
+        linhas = "".join(
+            f"<tr><td>{idade}</td><td>vacina {nome}</td></tr>"
+            for idade, nome in [("2 meses", "Pentavalente 1ª dose")] * 60
+        )
+        pagina = f"<html><script>x()</script><table>{linhas}</table></html>"
+        calendario = baixar(["https://www.gov.br/x"], get=lambda url, **kw: self.resposta(pagina))
+        assert calendario.url == "https://www.gov.br/x"
+        assert "2 meses | vacina Pentavalente 1ª dose" in calendario.texto
+        assert "x()" not in calendario.texto
+
+    def test_pula_fonte_quebrada_e_usa_a_proxima(self):
+        from app.calendario_sus import baixar
+
+        pagina = "<p>vacina BCG ao nascer</p>" * 100
+
+        def get(url, **kw):
+            return self.resposta(status=500) if url.endswith("a") else self.resposta(pagina)
+
+        assert baixar(["https://g/a", "https://g/b"], get=get).url == "https://g/b"
+
+    def test_pagina_sem_calendario_nao_conta(self):
+        from app.calendario_sus import baixar
+
+        assert baixar(["https://g/a"], get=lambda url, **kw: self.resposta("<p>erro</p>")) is None
+
+    def test_falha_nova_nao_apaga_o_calendario_anterior(self):
+        from app.calendario_sus import Calendario, CalendarioSUS
+
+        bom = Calendario("vacina BCG", "https://g", dt.datetime(2026, 11, 26, tzinfo=dt.UTC))
+        respostas = iter([bom, None])
+        calendario = CalendarioSUS(baixar_agora=lambda: next(respostas))
+        calendario.atualizar()
+        calendario.atualizar()
+        assert calendario.atual is bom
+
+    def test_calendario_vai_para_o_modelo_e_basta_como_fonte(self):
+        from app.calendario_sus import Calendario, CalendarioSUS
+
+        chamadas = []
+
+        def create(**kw):
+            chamadas.append(kw)
+            return resposta_com([])  # a busca da SBIm não citou nada
+
+        settings = Settings(openai_api_key="k", vector_store_id="vs")
+        engine = AssistantEngine(settings, client=SimpleNamespace(responses=SimpleNamespace(create=create)))
+        cal = Calendario("2 meses: Pentavalente, VIP, Pneumo 10, Rotavírus",
+                         "https://www.gov.br/arquivo", dt.datetime(2026, 11, 26, tzinfo=dt.UTC))
+        engine.calendario_sus = CalendarioSUS(baixar_agora=lambda: cal)
+        engine.calendario_sus.atualizar()
+
+        answer = engine.answer_vacina("quais vacinas aos 2 meses?")
+        contexto = chamadas[0]["input"][1]["content"]
+        assert "Calendário Nacional de Vacinação (SUS)" in contexto
+        assert "26/11/2026" in contexto and "Pentavalente" in contexto
+        assert "https://www.gov.br/saude/pt-br/vacinacao/calendario" in contexto
+        assert answer.grounded

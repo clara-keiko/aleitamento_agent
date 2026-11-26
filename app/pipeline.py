@@ -7,7 +7,7 @@ no ar) e checagem de fundamentação depois.
 
 import time
 
-from app import guardrails
+from app import caderneta, guardrails
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.llm import AssistantEngine, fallback_message
@@ -91,6 +91,9 @@ class MessagePipeline:
         # pergunta de novo uma vez, o que é aceitável.
         self._perguntados: set[str] = set()
         self.questionario = Questionario(memoria) if memoria is not None else None
+        # Leitura da caderneta esperando "1" para ser gravada:
+        # número -> (bebê, vacinas lidas, quando).
+        self._cadernetas_pendentes: dict[str, tuple] = {}
         # Pedidos de exclusão esperando CONFIRMAR: número -> quando pediu.
         self._exclusoes_pendentes: dict[str, float] = {}
 
@@ -157,6 +160,9 @@ class MessagePipeline:
         if not self.rate_limiter.allow(message.sender):
             self.channel.send_text(message.sender, guardrails.rate_limited_message())
             return "rate_limited"
+
+        if message.kind == "image":
+            return self._foto(message)
 
         text = self._resolve_text(message)
         if text is None:
@@ -303,6 +309,25 @@ class MessagePipeline:
 
     def _direitos_da_titular(self, message: IncomingMessage, text: str) -> str | None:
         sender = message.sender
+
+        # Resposta à conferência da caderneta: nada é gravado sem o "1".
+        pendente = self._cadernetas_pendentes.get(sender)
+        if pendente and time.monotonic() - pendente[2] < CONFIRMACAO_VALE_S:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None:
+                self._cadernetas_pendentes.pop(sender, None)
+                if not resposta:
+                    self.channel.send_text(sender, caderneta.MENSAGEM_NAO_ANOTADO)
+                    return "vacinas_recusadas"
+                bebe_id, vacinas, _ = pendente
+                anotadas = self._na_memoria(
+                    "registrar_vacinas", bebe_id, [(v.rotulo, v.data) for v in vacinas]
+                )
+                if anotadas is None:
+                    self.channel.send_text(sender, fallback_message())
+                    return "erro_memoria"
+                self.channel.send_text(sender, caderneta.mensagem_anotadas(*anotadas))
+                return "vacinas_anotadas"
 
         # "parar" no meio do questionário é parar o questionário, não sair do
         # serviço: precisa ser visto antes do SAIR/PARAR geral.
@@ -529,6 +554,57 @@ class MessagePipeline:
             self.questionario.encerrar(sender)
             return None
 
+    def _foto(self, message: IncomingMessage) -> str:
+        """Foto: só a página de vacinas da caderneta, e só para quem guarda."""
+        sender = message.sender
+        legenda = (message.text or "").strip()
+        if legenda and guardrails.classify_risk(legenda).level == guardrails.EMERGENCY_NOW:
+            self.channel.send_text(sender, guardrails.emergency_message())
+            return "emergencia"
+
+        if not self._memoria_ligada:
+            self.channel.send_text(sender, guardrails.unsupported_media_message())
+            return "nao_suportado"
+        if not self._na_memoria("decisao", sender):
+            self.channel.send_text(sender, caderneta.MENSAGEM_SEM_AUTORIZACAO)
+            return "foto_sem_autorizacao"
+        bebes = (self._na_memoria("perfil", sender) or {}).get("bebes") or []
+        if not bebes:
+            self.channel.send_text(sender, caderneta.MENSAGEM_SEM_BEBE)
+            return "foto_sem_bebe"
+
+        bloqueio = self._checar_limites(sender)
+        if bloqueio:
+            return bloqueio
+
+        imagem = self.channel.fetch_media(message)
+        if not imagem:
+            self.channel.send_text(sender, caderneta.MENSAGEM_FOTO_FALHOU)
+            return "foto_falhou"
+
+        # A foto só existe nesta função: é lida e descartada aqui.
+        leitura = self.engine.ler_caderneta(imagem, message.media_mime)
+        del imagem
+        self._registrar_uso(sender, leitura)
+        if leitura.erro:
+            self.channel.send_text(sender, fallback_message())
+            return "erro_modelo"
+        if not leitura.e_caderneta:
+            self.channel.send_text(sender, caderneta.MENSAGEM_NAO_E_CADERNETA)
+            return "foto_nao_caderneta"
+
+        bebe = bebes[0]  # o mais novo
+        validas, duvidosas = caderneta.separar(
+            leitura, bebe["nascimento"], self.questionario._hoje()
+        )
+        if not validas:
+            self.channel.send_text(sender, caderneta.MENSAGEM_ILEGIVEL)
+            return "foto_ilegivel"
+
+        self._cadernetas_pendentes[sender] = (bebe["id"], validas, time.monotonic())
+        self.channel.send_text(sender, caderneta.mensagem_para_conferir(validas, duvidosas))
+        return "foto_caderneta_lida"
+
     def _forget(self, sender: str) -> None:
         """Apaga tudo que guardamos de um usuário (LGPD, direito de eliminação)."""
         self.conversations.forget(sender)
@@ -536,6 +612,7 @@ class MessagePipeline:
         self.rate_limiter.forget(sender)
         if self.questionario:
             self.questionario.encerrar(sender)
+        self._cadernetas_pendentes.pop(sender, None)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""

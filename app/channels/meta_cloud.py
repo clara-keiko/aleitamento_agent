@@ -100,6 +100,18 @@ class MetaCloudChannel(Channel):
                 media_mime=audio.get("mime_type", "audio/ogg"),
             )
 
+        # Foto: hoje só a página de vacinas da caderneta (ver app/caderneta.py).
+        if kind == "image":
+            imagem = raw.get("image", {}) or {}
+            return IncomingMessage(
+                message_id=message_id,
+                sender=sender,
+                kind="image",
+                text=imagem.get("caption", "") or "",
+                media_id=imagem.get("id", ""),
+                media_mime=imagem.get("mime_type", "image/jpeg"),
+            )
+
         # Botões e listas chegam como interactive; aproveitamos o título.
         if kind == "interactive":
             interactive = raw.get("interactive", {}) or {}

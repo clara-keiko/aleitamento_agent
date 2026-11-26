@@ -183,6 +183,14 @@ class AssistantEngine:
         )
 
     # ------------------------------------------------------------------
+    # Foto da caderneta
+    # ------------------------------------------------------------------
+    def ler_caderneta(self, imagem: bytes, mime: str = "image/jpeg"):
+        from app.caderneta import ler_caderneta
+
+        return ler_caderneta(self, imagem, mime)
+
+    # ------------------------------------------------------------------
     # Áudio
     # ------------------------------------------------------------------
     def transcribe(self, audio: bytes, mime: str = "audio/ogg") -> str:

@@ -338,4 +338,7 @@ def descrever_perfil(perfil: dict | None, hoje: dt.date) -> str:
         if "aleitamento" in bebe:
             partes.append(f"alimentação: {NOMES_ALEITAMENTO.get(bebe['aleitamento'][0], bebe['aleitamento'][0])}")
         linhas.append("Bebê: " + ", ".join(partes))
+        if bebe.get("vacinas"):
+            anotadas = "; ".join(f"{r} ({d:%d/%m/%Y})" for r, d in bebe["vacinas"])
+            linhas.append(f"Vacinas anotadas (lidas da caderneta, conferidas pela pessoa): {anotadas}")
     return "\n".join(linhas)

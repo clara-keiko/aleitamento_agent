@@ -184,6 +184,21 @@ class MemoriaPersistente:
                 (bebe_id, tipo, numero_valor, texto_valor, referente_a, origem),
             )
 
+    def registrar_vacinas(self, bebe_id: str, vacinas: list[tuple[str, dt.date]]) -> tuple[int, int]:
+        """(novas, já anotadas). A mesma foto mandada duas vezes não duplica."""
+        novas = 0
+        with self._conectar() as con, con.transaction():
+            for rotulo, data in vacinas:
+                novas += con.execute(
+                    "INSERT INTO registros_do_bebe"
+                    " (bebe_id, tipo, valor_texto, referente_a, origem)"
+                    " VALUES (%s, 'vacina_tomada', %s, %s, 'foto_caderneta')"
+                    " ON CONFLICT (bebe_id, valor_texto, referente_a)"
+                    " WHERE tipo = 'vacina_tomada' DO NOTHING",
+                    (bebe_id, rotulo, data),
+                ).rowcount
+        return novas, len(vacinas) - novas
+
     def perfil(self, numero: str) -> dict | None:
         """Situação atual: cuidador(a) e bebês com o último valor de cada tipo."""
         with self._conectar() as con:
@@ -199,6 +214,14 @@ class MemoriaPersistente:
                 " ORDER BY data_nascimento DESC",
                 (conta[0],),
             ).fetchall()
+            vacinas = con.execute(
+                "SELECT r.bebe_id, r.valor_texto, r.referente_a FROM registros_do_bebe r"
+                " JOIN bebes b ON b.id = r.bebe_id"
+                " WHERE b.cuidador_id = %s AND r.tipo = 'vacina_tomada'"
+                " AND NOT EXISTS (SELECT 1 FROM registros_do_bebe c WHERE c.substitui_id = r.id)"
+                " ORDER BY r.referente_a",
+                (conta[0],),
+            ).fetchall()
             situacao = con.execute(
                 "SELECT s.bebe_id, s.tipo, s.valor_numero, s.valor_texto, s.referente_a"
                 " FROM situacao_atual_do_bebe s JOIN bebes b ON b.id = s.bebe_id"
@@ -206,6 +229,9 @@ class MemoriaPersistente:
                 (conta[0],),
             ).fetchall()
         atuais: dict = {}
+        por_bebe: dict = {}
+        for bebe_id, rotulo, data in vacinas:
+            por_bebe.setdefault(bebe_id, []).append((rotulo, data))
         for bebe_id, tipo, numero_valor, texto_valor, referente_a in situacao:
             atuais.setdefault(bebe_id, {})[tipo] = (
                 float(numero_valor) if numero_valor is not None else texto_valor, referente_a
@@ -216,7 +242,10 @@ class MemoriaPersistente:
             "gestante": conta[3],
             "data_provavel_parto": conta[4],
             "bebes": [
-                {"nascimento": nascimento, "sexo": sexo, **atuais.get(bebe_id, {})}
+                {
+                    "id": str(bebe_id), "nascimento": nascimento, "sexo": sexo,
+                    "vacinas": por_bebe.get(bebe_id, []), **atuais.get(bebe_id, {}),
+                }
                 for bebe_id, nascimento, sexo in bebes
             ],
         }

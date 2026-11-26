@@ -15,7 +15,7 @@ class IncomingMessage:
 
     message_id: str
     sender: str
-    kind: str  # "text" | "audio" | "unsupported"
+    kind: str  # "text" | "audio" | "image" | "unsupported"
     text: str = ""
     media_id: str = ""
     media_url: str = ""

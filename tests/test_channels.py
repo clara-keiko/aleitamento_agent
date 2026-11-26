@@ -114,9 +114,20 @@ class TestParseMeta:
         assert mensagem.kind == "text"
         assert mensagem.text == "Pega correta"
 
-    def test_imagem_e_marcada_como_nao_suportada(self):
+    def test_imagem_chega_como_imagem_com_legenda(self):
+        """Foto da caderneta de vacinação (ver app/caderneta.py)."""
+        payload = self._envelope({
+            "id": "wamid.4", "from": "5511999999999", "type": "image",
+            "image": {"id": "i", "mime_type": "image/jpeg", "caption": "caderneta"},
+        })
+        mensagem = meta_channel().parse_webhook(payload)[0]
+        assert mensagem.kind == "image"
+        assert mensagem.media_id == "i"
+        assert mensagem.text == "caderneta"
+
+    def test_documento_continua_nao_suportado(self):
         payload = self._envelope(
-            {"id": "wamid.4", "from": "5511999999999", "type": "image", "image": {"id": "i"}}
+            {"id": "wamid.5", "from": "5511999999999", "type": "document", "document": {"id": "d"}}
         )
         assert meta_channel().parse_webhook(payload)[0].kind == "unsupported"
 

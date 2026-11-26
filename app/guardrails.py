@@ -284,7 +284,8 @@ def out_of_scope_message() -> str:
 
 def unsupported_media_message() -> str:
     return (
-        "Por enquanto entendo *mensagens de texto e áudio*. "
+        "Por enquanto entendo *mensagens de texto e áudio* — e, para quem "
+        "autorizou guardar, *fotos da página de vacinas da caderneta*. "
         "Pode me contar sua dúvida por escrito ou mandar um áudio curto?"
     )
 

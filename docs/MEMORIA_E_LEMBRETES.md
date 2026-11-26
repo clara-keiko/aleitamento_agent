@@ -383,7 +383,7 @@ permitam uso automatizado num produto pago.
 |---|---|
 | **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR` com `CONFIRMAR` — **no ar** |
 | **2. Memória** | Conversa guardada e usada como histórico — **feito**; resumo e perfil no prompt — a fazer |
-| **3. Diário do bebê** | Nascimento, sexo, relação, idade da mãe, peso/altura/aleitamento acumulativos, confirmação antes de gravar, perguntas respondidas pelo diário |
+| **3. Diário do bebê** | Questionário inicial depois do "pode guardar" (e com `PERFIL`): relação, gestação/DPP, nascimento, sexo, peso, comprimento, aleitamento, idade da mãe — acumulativo, perfil no prompt e no `MEUS DADOS` — **feito**. Captura no meio da conversa e perguntas respondidas pelo diário — a fazer |
 | **4. Vacinas** | Calendário, pergunta de lembretes, modelo na Meta, agendador, `PARAR LEMBRETES` |
 | **5. e-Lactancia** | Indicação do site nas perguntas sobre remédio — **feito** |
 

@@ -363,6 +363,13 @@ def is_store_command(text: str) -> bool:
     return normalize(text).strip(" .!") in STORE_KEYWORDS
 
 
+PROFILE_KEYWORDS = {"perfil", "questionario", "meu perfil", "atualizar perfil"}
+
+
+def is_profile_command(text: str) -> bool:
+    return normalize(text).strip(" .!") in PROFILE_KEYWORDS
+
+
 def is_my_data_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
 
@@ -455,6 +462,9 @@ def my_data_message(dados: dict) -> str:
         linhas.append(f"• {dados['bebes']} bebê(s), {dados['registros_do_bebe']} anotações")
     else:
         linhas.append("• Nenhuma conversa guardada")
+    if dados.get("perfil_texto"):
+        linhas.append("\n*Perfil:*")
+        linhas.extend(f"• {linha}" for linha in dados["perfil_texto"].split("\n"))
     linhas.append("\n*Suas autorizações:*")
     for finalidade, decisao in dados.get("consentimentos", {}).items():
         estado = "sim" if decisao["aceito"] else "não"

@@ -129,6 +129,99 @@ class MemoriaPersistente:
         ]
 
     # ------------------------------------------------------------------
+    # Perfil e diário do bebê (questionário inicial)
+    # ------------------------------------------------------------------
+    def _atualizar_cuidador(self, numero: str, campos: str, valores: tuple) -> None:
+        with self._conectar() as con:
+            cuidador = self._garantir_cuidador(con, numero)
+            con.execute(f"UPDATE cuidadores SET {campos} WHERE id = %s", (*valores, cuidador))  # noqa: S608
+
+    def salvar_relacao(self, numero: str, relacao: str) -> None:
+        self._atualizar_cuidador(numero, "relacao = %s", (relacao,))
+
+    def salvar_gestacao(self, numero: str, data_provavel_parto: dt.date) -> None:
+        self._atualizar_cuidador(
+            numero, "gestante = true, data_provavel_parto = %s", (data_provavel_parto,)
+        )
+
+    def salvar_ano_nascimento_mae(self, numero: str, ano: int) -> None:
+        self._atualizar_cuidador(numero, "ano_nascimento_mae = %s", (ano,))
+
+    def salvar_bebe(self, numero: str, data_nascimento: dt.date) -> str:
+        """O bebê com essa data de nascimento; cria se ainda não existe."""
+        with self._conectar() as con, con.transaction():
+            cuidador = self._garantir_cuidador(con, numero)
+            # O bebê nasceu: a gestação registrada antes terminou.
+            con.execute(
+                "UPDATE cuidadores SET gestante = false WHERE id = %s", (cuidador,)
+            )
+            existente = con.execute(
+                "SELECT id FROM bebes WHERE cuidador_id = %s AND data_nascimento = %s",
+                (cuidador, data_nascimento),
+            ).fetchone()
+            if existente:
+                return str(existente[0])
+            return str(con.execute(
+                "INSERT INTO bebes (cuidador_id, data_nascimento) VALUES (%s, %s) RETURNING id",
+                (cuidador, data_nascimento),
+            ).fetchone()[0])
+
+    def salvar_sexo(self, bebe_id: str, sexo: str) -> None:
+        with self._conectar() as con:
+            con.execute("UPDATE bebes SET sexo = %s WHERE id = %s", (sexo, bebe_id))
+
+    def registrar_do_bebe(
+        self, bebe_id: str, tipo: str, referente_a: dt.date,
+        numero_valor: float | None = None, texto_valor: str | None = None,
+        origem: str = "pergunta_do_lactai",
+    ) -> None:
+        """Uma linha nova no diário; nunca sobrescreve as anteriores."""
+        with self._conectar() as con:
+            con.execute(
+                "INSERT INTO registros_do_bebe"
+                " (bebe_id, tipo, valor_numero, valor_texto, referente_a, origem)"
+                " VALUES (%s, %s, %s, %s, %s, %s)",
+                (bebe_id, tipo, numero_valor, texto_valor, referente_a, origem),
+            )
+
+    def perfil(self, numero: str) -> dict | None:
+        """Situação atual: cuidador(a) e bebês com o último valor de cada tipo."""
+        with self._conectar() as con:
+            conta = con.execute(
+                "SELECT id, relacao, ano_nascimento_mae, gestante, data_provavel_parto"
+                " FROM cuidadores WHERE telefone_hash = %s",
+                (_chave(numero),),
+            ).fetchone()
+            if conta is None:
+                return None
+            bebes = con.execute(
+                "SELECT id, data_nascimento, sexo FROM bebes WHERE cuidador_id = %s"
+                " ORDER BY data_nascimento DESC",
+                (conta[0],),
+            ).fetchall()
+            situacao = con.execute(
+                "SELECT s.bebe_id, s.tipo, s.valor_numero, s.valor_texto, s.referente_a"
+                " FROM situacao_atual_do_bebe s JOIN bebes b ON b.id = s.bebe_id"
+                " WHERE b.cuidador_id = %s",
+                (conta[0],),
+            ).fetchall()
+        atuais: dict = {}
+        for bebe_id, tipo, numero_valor, texto_valor, referente_a in situacao:
+            atuais.setdefault(bebe_id, {})[tipo] = (
+                float(numero_valor) if numero_valor is not None else texto_valor, referente_a
+            )
+        return {
+            "relacao": conta[1],
+            "ano_nascimento_mae": conta[2],
+            "gestante": conta[3],
+            "data_provavel_parto": conta[4],
+            "bebes": [
+                {"nascimento": nascimento, "sexo": sexo, **atuais.get(bebe_id, {})}
+                for bebe_id, nascimento, sexo in bebes
+            ],
+        }
+
+    # ------------------------------------------------------------------
     # Direitos da titular
     # ------------------------------------------------------------------
     def tem_dados(self, numero: str) -> bool:

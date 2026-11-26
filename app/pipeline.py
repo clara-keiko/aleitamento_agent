@@ -21,6 +21,7 @@ from app.piloto import (
     custo_da_resposta,
     encontrar_codigo,
 )
+from app.questionario import Questionario, descrever_perfil
 
 log = get_logger(__name__)
 
@@ -89,6 +90,7 @@ class MessagePipeline:
         # respondeu. Evita perguntar a cada mensagem; depois de um reinício,
         # pergunta de novo uma vez, o que é aceitável.
         self._perguntados: set[str] = set()
+        self.questionario = Questionario(memoria) if memoria is not None else None
         # Pedidos de exclusão esperando CONFIRMAR: número -> quando pediu.
         self._exclusoes_pendentes: dict[str, float] = {}
 
@@ -191,6 +193,14 @@ class MessagePipeline:
             self.channel.send_text(message.sender, guardrails.medical_referral_message())
             return "encaminhamento"
 
+        # Questionário inicial em andamento: a resposta curta é dele. Uma
+        # dúvida no meio (texto longo, "?") passa e é respondida normalmente.
+        if self.questionario and self.questionario.ativo(message.sender):
+            seguinte = self._na_memoria_questionario(message.sender, text)
+            if seguinte:
+                self.channel.send_text(message.sender, seguinte)
+                return "questionario"
+
         # Saudação ou agradecimento não vai ao modelo: gastaria token e cairia
         # na checagem de fundamentação, devolvendo "não encontrei no material".
         if guardrails.is_small_talk(text):
@@ -212,6 +222,17 @@ class MessagePipeline:
             history = self._na_memoria("historico", message.sender, self.settings.history_turns)
         if history is None:
             history = self.conversations.history(message.sender)
+        if consentiu:
+            perfil = descrever_perfil(
+                self._na_memoria("perfil", message.sender), self.questionario._hoje()
+            )
+            if perfil:
+                history = [{
+                    "role": "system",
+                    "content": "O que esta pessoa já contou (use para adaptar a "
+                    "resposta à idade e à situação do bebê; não invente o que "
+                    "não está aqui):\n" + perfil,
+                }] + history
         answer = self.engine.answer(text, history=history)
         self._registrar_uso(message.sender, answer)
 
@@ -269,6 +290,16 @@ class MessagePipeline:
     def _direitos_da_titular(self, message: IncomingMessage, text: str) -> str | None:
         sender = message.sender
 
+        # "parar" no meio do questionário é parar o questionário, não sair do
+        # serviço: precisa ser visto antes do SAIR/PARAR geral.
+        if (
+            self.questionario
+            and self.questionario.ativo(sender)
+            and self.questionario.e_parada(text)
+        ):
+            self.channel.send_text(sender, self.questionario.responder(sender, text))
+            return "questionario_parado"
+
         # Apagar é irreversível: com dados guardados, só depois de CONFIRMAR.
         pediu_antes = time.monotonic() - self._exclusoes_pendentes.get(sender, -1e9)
         if pediu_antes < CONFIRMACAO_VALE_S and (
@@ -305,8 +336,22 @@ class MessagePipeline:
 
         if guardrails.is_my_data_command(text):
             dados = self._na_memoria("meus_dados", sender, padrao={}) if self._memoria_ligada else {}
+            if dados:
+                perfil = self._na_memoria("perfil", sender)
+                dados["perfil_texto"] = descrever_perfil(perfil, self.questionario._hoje())
             self.channel.send_text(sender, guardrails.my_data_message(dados or {}))
             return "meus_dados"
+
+        if self._memoria_ligada and guardrails.is_profile_command(text):
+            if self._na_memoria("decisao", sender):
+                self.channel.send_text(sender, self.questionario.iniciar(sender))
+                return "questionario"
+            # Sem autorização não há onde guardar: primeiro a pergunta.
+            self._perguntados.add(sender)
+            self.channel.send_text(
+                sender, guardrails.memory_consent_question(self.settings.url_politica)
+            )
+            return "pergunta_de_memoria"
 
         if self._memoria_ligada and guardrails.is_store_command(text):
             if self._na_memoria("decisao", sender):
@@ -325,12 +370,15 @@ class MessagePipeline:
             if resposta is not None and self._e_resposta_de_memoria(sender, text):
                 self._na_memoria("decidir", sender, resposta, message.message_id)
                 self._perguntados.discard(sender)
-                self.channel.send_text(
-                    sender,
-                    guardrails.memory_consent_yes_message() if resposta
-                    else guardrails.memory_consent_no_message(),
-                )
-                return "memoria_aceita" if resposta else "memoria_recusada"
+                if resposta:
+                    self.channel.send_text(
+                        sender,
+                        guardrails.memory_consent_yes_message()
+                        + "\n\n" + self.questionario.iniciar(sender),
+                    )
+                    return "memoria_aceita"
+                self.channel.send_text(sender, guardrails.memory_consent_no_message())
+                return "memoria_recusada"
         return None
 
     def _e_resposta_de_memoria(self, sender: str, text: str) -> bool:
@@ -458,11 +506,22 @@ class MessagePipeline:
             custo += self.settings.custo_busca_usd
         self.piloto.registrar_pergunta(None if self.channel.name == "web" else sender, custo)
 
+    def _na_memoria_questionario(self, sender: str, text: str) -> str | None:
+        """Resposta ao questionário; banco fora encerra sem travar a conversa."""
+        try:
+            return self.questionario.responder(sender, text)
+        except Exception as exc:  # noqa: BLE001
+            log.error("questionário interrompido: %s", exc)
+            self.questionario.encerrar(sender)
+            return None
+
     def _forget(self, sender: str) -> None:
         """Apaga tudo que guardamos de um usuário (LGPD, direito de eliminação)."""
         self.conversations.forget(sender)
         self.known_users.forget(sender)
         self.rate_limiter.forget(sender)
+        if self.questionario:
+            self.questionario.encerrar(sender)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""

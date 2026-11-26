@@ -321,3 +321,38 @@ class TestNovaClienteComecaPelaPergunta:
         # Na próxima resposta comum, a pergunta aparece.
         pipeline.handle(text_message("como melhorar a pega?", "m2", NUMERO))
         assert "Posso guardar" in channel.sent[-1][1]
+
+
+class TestBoasVindasDepoisDeReiniciar:
+    """Cada deploy zera a lista de conhecidos; a apresentação não pode
+    reaparecer no meio da conversa de quem já decidiu."""
+
+    def test_quem_ja_decidiu_nao_recebe_boas_vindas_de_novo(self, memoria):
+        memoria.decidir(NUMERO, True, "w0")
+        pipeline, channel, _ = montar(memoria)  # processo novo
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        assert "assistente educativo" not in channel.bodies
+
+    def test_quem_recusou_tambem_nao(self, memoria):
+        memoria.decidir(NUMERO, False, "w0")
+        pipeline, channel, _ = montar(memoria)
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        assert "assistente educativo" not in channel.bodies
+
+    def test_questionario_depois_de_reiniciar_sem_boas_vindas(self, memoria):
+        memoria.decidir(NUMERO, True, "w0")
+        pipeline, channel, _ = montar(memoria)
+        pipeline.handle(text_message("PERFIL", "m1", NUMERO))
+        pipeline.handle(text_message("1", "m2", NUMERO))
+        assert "assistente educativo" not in channel.bodies
+
+    def test_testadora_do_piloto_nao_recebe_de_novo(self):
+        from app.piloto import RegistroDoPiloto, ler_convites
+
+        settings = Settings(openai_api_key="k", vector_store_id="vs", modo_acesso="convite")
+        piloto = RegistroDoPiloto(":memory:", ler_convites("PILOTO30:40"))
+        piloto.usar_convite(NUMERO, "PILOTO30")
+        channel = FakeChannel()
+        pipeline = MessagePipeline(settings, channel, FakeEngine(), piloto=piloto)
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        assert "assistente educativo" not in channel.bodies

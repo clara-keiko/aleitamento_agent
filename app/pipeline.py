@@ -178,7 +178,9 @@ class MessagePipeline:
         # Primeiro contato: escopo, aviso de automação, canal de emergência e
         # a pergunta de guarda. Em emergência a pergunta fica para depois:
         # nada pode competir com o 192.
-        if self.known_users.is_first_contact(message.sender):
+        if self.known_users.is_first_contact(message.sender) and not self._ja_conhece(
+            message.sender, consentiu
+        ):
             pergunta = (
                 "" if risk.level == guardrails.EMERGENCY_NOW
                 else self._pergunta_de_memoria(message.sender)
@@ -273,6 +275,18 @@ class MessagePipeline:
     # ------------------------------------------------------------------
     # Memória persistente e direitos da titular
     # ------------------------------------------------------------------
+    def _ja_conhece(self, sender: str, consentiu: bool | None) -> bool:
+        """Quem já passou pelas boas-vindas antes de um reinício.
+
+        A lista de conhecidos vive na memória do processo e zera a cada
+        deploy; sem isto, toda testadora recebia a apresentação de novo no
+        meio da conversa. Decisão de guarda (sim ou não) e convite aceito
+        ficam no banco: são prova de que ela já foi apresentada.
+        """
+        if consentiu is not None:
+            return True
+        return bool(self.piloto and self.piloto.autorizado(sender))
+
     def _pergunta_de_memoria(self, sender: str) -> str:
         """A pergunta de consentimento, para ir no fim de uma mensagem.
 

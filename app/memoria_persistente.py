@@ -20,7 +20,9 @@ from app.piloto import numero_canonico
 log = get_logger(__name__)
 
 MEMORIA = "memoria"
-VERSAO_MEMORIA = "memoria-v1"
+# v1: texto sem link da política, e GUARDAR aceitava sem mostrar a pergunta.
+# v2: link da política no texto; aceite só respondendo à pergunta inteira.
+VERSAO_MEMORIA = "memoria-v2"
 
 _PAPEL = {"cuidador": "user", "lactai": "assistant"}
 

@@ -261,7 +261,7 @@ class MessagePipeline:
         if self._na_memoria("decisao", sender, padrao=False) is not None:
             return ""
         self._perguntados.add(sender)
-        return "\n\n" + guardrails.memory_consent_question()
+        return "\n\n" + guardrails.memory_consent_question(self.settings.url_politica)
 
     def _direitos_da_titular(self, message: IncomingMessage, text: str) -> str | None:
         sender = message.sender
@@ -295,6 +295,18 @@ class MessagePipeline:
             self.channel.send_text(sender, guardrails.my_data_message(dados or {}))
             return "meus_dados"
 
+        if self._memoria_ligada and guardrails.is_store_command(text):
+            if self._na_memoria("decisao", sender):
+                self.channel.send_text(sender, guardrails.memory_already_stored_message())
+                return "memoria_ja_aceita"
+            # Aceite só vale respondendo à pergunta inteira: o que fica
+            # guardado, por quanto tempo, como apagar e o link da política.
+            self._perguntados.add(sender)
+            self.channel.send_text(
+                sender, guardrails.memory_consent_question(self.settings.url_politica)
+            )
+            return "pergunta_de_memoria"
+
         if self._memoria_ligada:
             resposta = guardrails.consent_answer(text)
             if resposta is not None and self._e_resposta_de_memoria(sender, text):
@@ -314,8 +326,6 @@ class MessagePipeline:
         Depois de um reinício a lista de perguntados zera; "1" ou "2" de quem
         nunca decidiu ainda contam, porque não significam outra coisa aqui.
         """
-        if guardrails.normalize(text).strip(" .!") == "guardar":
-            return True
         if sender in self._perguntados:
             return True
         return text.strip() in {"1", "2"} and self._na_memoria("decisao", sender, padrao=False) is None

@@ -340,7 +340,7 @@ DELETE_KEYWORDS = {
     "excluir", "excluir meus dados", "excluir tudo",
 }
 MY_DATA_KEYWORDS = {"meus dados", "quais sao meus dados", "o que voce guardou"}
-_SIM = {"1", "sim", "pode", "pode guardar", "quero", "ok", "aceito", "pode sim", "guardar"}
+_SIM = {"1", "sim", "pode", "pode guardar", "quero", "ok", "aceito", "pode sim"}
 _NAO = {"2", "nao", "nao guarde", "nao quero", "nao precisa", "nao, obrigada", "nao obrigada"}
 
 
@@ -353,6 +353,14 @@ CONFIRM_KEYWORDS = {"confirmar", "confirmo", "pode apagar", "sim, apagar", "sim 
 
 def is_confirmation(text: str) -> bool:
     return normalize(text).strip(" .!") in CONFIRM_KEYWORDS
+
+
+STORE_KEYWORDS = {"guardar", "quero guardar", "pode guardar minhas conversas"}
+
+
+def is_store_command(text: str) -> bool:
+    """GUARDAR não autoriza nada sozinho: abre a pergunta com o texto inteiro."""
+    return normalize(text).strip(" .!") in STORE_KEYWORDS
 
 
 def is_my_data_command(text: str) -> bool:
@@ -369,12 +377,14 @@ def consent_answer(text: str) -> bool | None:
     return None
 
 
-def memory_consent_question() -> str:
+def memory_consent_question(url_politica: str = "") -> str:
     """Consentimento específico e destacado (LGPD art. 11, I e art. 14).
 
-    Diz o que é guardado, para quê, por quanto tempo e como apagar. Mudou o
-    texto, muda VERSAO_MEMORIA: a prova do consentimento aponta a versão lida.
+    Diz o que é guardado, para quê, por quanto tempo, como apagar e onde ler
+    a política inteira. Mudou o texto, muda VERSAO_MEMORIA: a prova do
+    consentimento aponta a versão lida.
     """
+    politica = f"Todos os detalhes: {url_politica}\n\n" if url_politica else ""
     return (
         "📒 *Posso guardar nossas conversas?*\n\n"
         "Com isso, eu consigo te ajudar melhor:\n"
@@ -387,8 +397,16 @@ def memory_consent_question() -> str:
         "só para te atender. Se você passar 1 ano sem conversar comigo, sua "
         "conta fica inativa e é apagada 2 anos depois. Para apagar antes, "
         "mande *APAGAR*.\n\n"
+        f"{politica}"
         "*1* – Pode guardar\n"
         "*2* – Não guarde"
+    )
+
+
+def memory_already_stored_message() -> str:
+    return (
+        "Já estou guardando nossas conversas. 💛 Para ver o que guardei, mande "
+        "*MEUS DADOS*. Para apagar tudo, *APAGAR*."
     )
 
 

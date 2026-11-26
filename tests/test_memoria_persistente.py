@@ -177,10 +177,39 @@ class TestNoPipeline:
         pipeline.handle(text_message("sim", "m1", NUMERO))
         assert memoria.decisao(NUMERO) is False
 
-    def test_guardar_muda_de_ideia(self, memoria):
+    def test_guardar_mostra_a_pergunta_e_so_o_1_aceita(self, memoria):
+        """GUARDAR sozinho não é consentimento informado."""
         memoria.decidir(NUMERO, False, "wamid.0")
+        pipeline, channel, _ = montar(memoria)
+        assert pipeline.handle(text_message("GUARDAR", "m1", NUMERO)) == "pergunta_de_memoria"
+        assert memoria.decisao(NUMERO) is False
+        pergunta = channel.sent[-1][1]
+        assert "Posso guardar" in pergunta and "/privacidade" in pergunta
+        assert pipeline.handle(text_message("1", "m2", NUMERO)) == "memoria_aceita"
+        assert memoria.decisao(NUMERO) is True
+
+    def test_meus_dados_e_depois_guardar(self, memoria):
+        """O caminho do teste real: MEUS DADOS, GUARDAR, 1."""
+        pipeline, channel, _ = montar(memoria)
+        assert pipeline.handle(text_message("meus dados", "m1", NUMERO)) == "meus_dados"
+        assert pipeline.handle(text_message("guardar", "m2", NUMERO)) == "pergunta_de_memoria"
+        assert memoria.decisao(NUMERO) is None
+        assert pipeline.handle(text_message("1", "m3", NUMERO)) == "memoria_aceita"
+
+    def test_guardar_quando_ja_guarda(self, memoria):
+        memoria.decidir(NUMERO, True, "wamid.0")
         pipeline, _, _ = montar(memoria)
-        assert pipeline.handle(text_message("GUARDAR", "m1", NUMERO)) == "memoria_aceita"
+        assert pipeline.handle(text_message("GUARDAR", "m1", NUMERO)) == "memoria_ja_aceita"
+
+    def test_aceite_grava_a_versao_do_texto(self, memoria, banco):
+        from app.memoria_persistente import VERSAO_MEMORIA
+
+        pipeline, _, _ = montar(memoria)
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        pipeline.handle(text_message("1", "m2", NUMERO))
+        with psycopg.connect(banco) as con:
+            versao = con.execute("SELECT versao_texto FROM consentimentos").fetchone()[0]
+        assert versao == VERSAO_MEMORIA == "memoria-v2"
 
     @pytest.mark.parametrize("pedido,confirmacao", [
         ("sair", "CONFIRMAR"),

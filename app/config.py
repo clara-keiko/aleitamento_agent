@@ -85,6 +85,12 @@ class Settings:
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL"))
     chave_dados: str = field(default_factory=lambda: _env("CHAVE_DADOS"))
     memoria_ativa: bool = field(default_factory=lambda: _env_bool("MEMORIA_ATIVA", False))
+    # Link da política de privacidade, mostrado na pergunta de consentimento.
+    url_politica: str = field(
+        default_factory=lambda: _env(
+            "URL_POLITICA", "https://aleitamento-agent-cmb6.onrender.com/privacidade"
+        )
+    )
     # Sem mensagem por este tempo, a conta fica inativa; inativa por este
     # outro, é apagada. Pedido de exclusão apaga na hora.
     retencao_meses_sem_uso: int = field(

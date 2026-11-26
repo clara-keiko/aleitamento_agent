@@ -337,3 +337,13 @@ class TestPoliticaDePrivacidade:
         with TestClient(main.app) as c:
             assert c.get("/chat").status_code == 404
             assert c.get("/privacidade").status_code == 200
+
+
+class TestMonitorComHead:
+    """Monitores (UptimeRobot) checam com HEAD; 405 virava alerta falso."""
+
+    def test_health_aceita_head(self, client):
+        assert client.head("/health").status_code == 200
+
+    def test_ready_aceita_head(self, client):
+        assert client.head("/health/ready").status_code in (200, 503)

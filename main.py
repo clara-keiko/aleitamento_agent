@@ -186,7 +186,7 @@ if settings.provider == PROVIDER_EVOLUTION and settings.ready:
         vigia.parar()
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> JSONResponse:
     """Liveness: responde 200 sempre que o processo está de pé.
 
@@ -198,7 +198,7 @@ def health() -> JSONResponse:
     return JSONResponse(_status_payload(), status_code=200)
 
 
-@app.get("/health/ready")
+@app.api_route("/health/ready", methods=["GET", "HEAD"])
 def readiness() -> JSONResponse:
     """Readiness: 503 enquanto o serviço não puder atender de verdade.
 

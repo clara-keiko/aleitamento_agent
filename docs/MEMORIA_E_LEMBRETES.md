@@ -1,24 +1,35 @@
-# Memória, perfil e lembretes — desenho
+# Memória, perfil, lembretes de vacina e e-Lactancia — desenho
 
-Proposta para o LactAI lembrar de cada mãe e de cada bebê, e avisar de vacinas,
-consultas e do que importa em cada fase. **Ainda não implementado.** As
-decisões marcadas com ⚖️ são da Watanabe AI Tech, não técnicas.
+Proposta para o LactAI ser a **memória do cuidador(a)**: lembrar de cada
+conversa, guardar a história do bebê (peso, altura, alimentação) e avisar das
+vacinas no mesversário. **Ainda não implementado.** Decisões marcadas com ⚖️
+são da Watanabe AI Tech, não técnicas.
 
-> Este documento não é parecer jurídico. Por tratar dado de saúde de criança,
-> vale uma revisão de advogado(a) de proteção de dados antes de abrir para o
-> público.
+> Não é parecer jurídico. Por tratar dado de saúde de criança, vale revisão de
+> advogado(a) de proteção de dados antes de abrir ao público.
+
+Decisões já tomadas (26/11/2026):
+
+- O conteúdo vem de material de autoria clínica; não há etapa de revisão
+  clínica separada.
+- Quem conversa é o **cuidador(a)**: mãe, pai, avó, outra pessoa.
+- Guardar do bebê: nascimento, sexo, peso, altura, tipo de aleitamento; da
+  mãe: idade. **Tudo acumulativo**: cada informação nova se soma à história,
+  nada é sobrescrito.
+- Lembretes **só de vacina, no mesversário**, e só se a pessoa quiser.
+- Incluir a consulta de **medicamento na amamentação** com o e-Lactancia.
 
 ---
 
-## 1. O que a mãe ganha
+## 1. O que o cuidador(a) ganha
 
 | Recurso | Exemplo |
 |---|---|
-| **Memória da conversa** | Na terça, o LactAI ainda sabe que na segunda ela falou de rachadura. |
-| **Perfil da mãe e do bebê** | "A Helena tem 2 meses e mama no peito exclusivo": a resposta já parte disso. |
-| **Lembrete de vacina** | "Amanhã a Helena completa 4 meses: é a 2ª dose da pentavalente, VIP, pneumo e rotavírus." |
-| **Lembrete de consulta** | "Está chegando a consulta de 6 meses com o pediatra." |
-| **O que esperar da fase** | Aos 3–4 meses: "é comum o bebê se distrair no peito; não é falta de leite." |
+| **Memória da conversa** | Na terça, o LactAI ainda sabe que na segunda falamos de rachadura. |
+| **Perfil que entra na resposta** | "A Helena tem 2 meses e mama no peito exclusivo": a resposta já parte disso. |
+| **Diário do bebê** | "Qual era o peso dela no mês passado?" → "4,2 kg em 03/10; hoje 5,1 kg (+900 g)." |
+| **Lembrete de vacina** | No mesversário de 4 meses: "Hoje a Helena faz 4 meses! É a vez da 2ª dose da pentavalente, VIP, pneumo 10 e rotavírus." |
+| **Medicamento e amamentação** | "Posso tomar ibuprofeno?" → resposta da base + nível de risco no e-Lactancia + link. |
 
 ---
 
@@ -26,275 +37,357 @@ decisões marcadas com ⚖️ são da Watanabe AI Tech, não técnicas.
 
 ### 2.1 Por que é exigente
 
-- **Dado de saúde é dado sensível** (art. 5º, II). Fora do atendimento por
-  profissional de saúde, a base legal que sobra é o **consentimento
-  específico e destacado** (art. 11, I).
-- **Dado de criança** exige consentimento **específico e em destaque de pelo
-  menos um dos pais** e tratamento no **melhor interesse da criança**
-  (art. 14). A mãe consente pelo bebê.
+- **Dado de saúde é sensível** (art. 5º, II). Fora do atendimento por
+  profissional de saúde, a base legal é o **consentimento específico e
+  destacado** (art. 11, I).
+- **Dado de criança** (art. 14): consentimento específico e em destaque de
+  **pelo menos um dos pais ou do responsável legal**, sempre no melhor
+  interesse da criança. Como quem conversa pode ser avó ou outra pessoa, o
+  LactAI pergunta a relação com o bebê, e **só guarda dado do bebê se a pessoa
+  declarar ser mãe, pai ou responsável legal**. Os outros cuidadores são
+  atendidos normalmente, mas sem diário do bebê.
 - Quem guarda tem de **provar** o consentimento (art. 8º, §2º).
-- **Memória infinita não existe na LGPD:** o dado só pode ficar enquanto
-  servir à finalidade (art. 15 e 16). A tradução prática é "enquanto ela usar
-  o serviço", com um prazo de inatividade que apaga tudo. ⚖️
+- **"Memória infinita" vira "enquanto usar"** (art. 15 e 16): guarda enquanto
+  houver uso e apaga tudo após um período sem nenhuma mensagem. ⚖️ prazo
+  proposto: **24 meses**, porque o calendário de vacinas vai até os 4–5 anos e
+  há longos intervalos sem vacina.
 
 ### 2.2 Consentimentos separados
 
-Cada finalidade tem o seu "sim", e cada uma pode ser retirada sozinha:
-
 | Finalidade | O que libera | Sem ela |
 |---|---|---|
-| `atendimento` | Responder às perguntas (já existe) | Só a resposta de emergência (192) |
-| `memoria` | Guardar conversa e perfil da mãe e do bebê | Funciona como hoje: memória de 30 min |
-| `lembretes` | Mandar mensagem sem ela ter escrito antes | Nenhuma mensagem ativa |
-| `melhoria` | Equipe ler conversas, sem identificação, para revisar respostas | Conversas nunca lidas por pessoas |
+| `atendimento` | Responder às perguntas (já existe) | Só a orientação de emergência (192) |
+| `memoria` | Guardar conversa e diário do bebê | Memória de 30 min, como hoje |
+| `lembretes` | Mensagem de vacina no mesversário | Nenhuma mensagem ativa |
+| `melhoria` | Equipe ler conversas sem identificação, para melhorar respostas | Conversa nunca lida por pessoas |
 
-Primeira mensagem de quem entra (um balão, perguntas curtas, resposta por
-número):
+Perguntas, cada uma num momento:
 
-> Para eu lembrar de você e do seu bebê entre uma conversa e outra, preciso
-> guardar o que você me contar sobre a saúde de vocês dois. Isso fica
-> protegido, só serve para te atender e você apaga quando quiser (é só
-> mandar *APAGAR*).
->
-> *1* – Pode guardar
-> *2* – Não guarde, só responda minhas dúvidas
+1. **Logo na entrada** (`memoria`):
+   > Posso guardar o que você me contar sobre você e o bebê, para lembrar nas
+   > próximas conversas e montar o histórico de peso, altura e mamadas? Fica
+   > protegido, serve só para te atender e você apaga quando quiser
+   > (mande *APAGAR*).
+   > *1* – Pode guardar  *2* – Não guarde
+2. **Relação com o bebê** (mãe, pai, responsável legal, outro): decide se o
+   diário do bebê pode existir.
+3. **Depois da data de nascimento** (`lembretes`):
+   > Quer que eu te avise das vacinas da Helena no dia do mesversário?
+   > *1* – Quero  *2* – Não precisa
+4. **Depois de alguns dias de uso, em separado** (`melhoria`).
 
-Depois do "1", em outra mensagem: lembretes (sim/não). A pergunta sobre
-`melhoria` vem só depois de alguns dias de uso, separada, para não virar
-"aceito tudo".
-
-### 2.3 Direitos da titular (art. 18), por palavra no próprio WhatsApp
+### 2.3 Direitos da titular (art. 18), por palavra no WhatsApp
 
 | Mensagem | O que acontece |
 |---|---|
-| `MEUS DADOS` | Ela recebe o que está guardado: perfil, bebês, lembretes ativos e consentimentos |
-| `CORRIGIR` | Ela corrige um dado do perfil (por exemplo, a data de nascimento) |
-| `PARAR LEMBRETES` | Revoga `lembretes`; o resto continua |
-| `APAGAR` / `SAIR` | Apaga **tudo** na hora: conversa, perfil, bebês, lembretes. Fica só a prova do consentimento e da revogação, sem conteúdo |
-| e-mail ao encarregado | Cópia completa (portabilidade) e demais pedidos |
+| `MEUS DADOS` | Recebe tudo o que está guardado: perfil, diário do bebê, lembretes, consentimentos |
+| `CORRIGIR` | Corrige um dado: grava a correção **como novo registro**, e o errado fica marcado como substituído |
+| `PARAR LEMBRETES` | Revoga só `lembretes` |
+| `APAGAR` / `SAIR` | Apaga **tudo** na hora. Fica só a prova do consentimento e da revogação, sem conteúdo |
+| e-mail ao encarregado(a) | Cópia completa (portabilidade) e demais pedidos |
 
 ### 2.4 Segurança (art. 46)
 
-- **Criptografia dos campos sensíveis no próprio aplicativo** (texto das
-  mensagens, resumo, observações, nomes), com uma chave `CHAVE_DADOS` que fica
-  só nas variáveis do Render, nunca no banco. Um vazamento do banco ou de um
-  backup não expõe conteúdo.
-- **Telefone:** HMAC para achar a conta (como hoje) **e** telefone cifrado,
-  porque lembrete precisa de destino. Sem `lembretes`, o telefone cifrado nem
-  é gravado.
-- **Painel:** nunca mostra conteúdo nem telefone. A leitura de conversas
-  (para revisão clínica) só vale para quem consentiu com `melhoria`, mostra o
-  texto sem nome nem telefone, e **cada acesso fica registrado** (quem, quando,
-  por quê).
+- **Campos sensíveis cifrados no próprio aplicativo** (mensagens, resumo,
+  observações, nomes) com a chave `CHAVE_DADOS`, que fica só nas variáveis do
+  Render, nunca no banco nem no backup.
+- **Telefone:** HMAC para achar a conta (como hoje) e, só com `lembretes`,
+  cifrado para poder enviar.
+- **Medidas e datas ficam legíveis** (peso, altura, nascimento): sem nome e
+  sem telefone, não identificam ninguém, e precisam de conta e gráfico.
+- **Painel:** nunca mostra conteúdo nem telefone. Leitura de conversa só para
+  quem consentiu `melhoria`, sem identificação, e **cada acesso registrado**.
 - **Logs:** continuam sem conteúdo.
 
 ### 2.5 Retenção ⚖️
 
 | Dado | Prazo proposto |
 |---|---|
-| Conversa, resumo, perfil, bebês | Enquanto houver uso. **Apagado após 12 meses sem nenhuma mensagem** |
-| Lembretes já enviados | 90 dias (prova de envio), depois só a contagem |
-| Prova de consentimento/revogação | 5 anos após o fim (defesa em processo), sem conteúdo |
+| Conversa, resumo, perfil, diário do bebê | Enquanto houver uso; **apagado após 24 meses sem mensagem** |
+| Lembretes enviados | 90 dias, depois só a contagem |
+| Prova de consentimento/revogação | 5 anos após o fim, sem conteúdo |
 | Registro de acesso da equipe | 2 anos |
 
-### 2.6 O que precisa existir fora do código ⚖️
+### 2.6 Fora do código ⚖️
 
-- **Encarregado(a)** de dados nomeado(a), com contato na política
-  (pode ser alguém da própria empresa).
-- **Política de privacidade** reescrita: finalidades, prazos, operadores.
-  O código só muda junto com ela.
-- **Transferência internacional** declarada: OpenAI (EUA), Meta (EUA) e
-  Render (servidor em Oregon, EUA).
-- **RIPD** (relatório de impacto, art. 38). Para dado sensível de criança é o
-  documento que a ANPD pede primeiro. Posso redigir o rascunho.
-- **Plano de incidente**: quem avisa a ANPD e as titulares, e em quanto tempo
-  (art. 48).
+- **Encarregado(a)** de dados nomeado(a), com contato na política.
+- **Política de privacidade** nova (finalidades, prazos, operadores). O código
+  só vai ao ar junto com ela.
+- **Transferência internacional** declarada: OpenAI, Meta, Render (EUA).
+- **RIPD** (art. 38): rascunho fica comigo.
+- **Plano de incidente** (art. 48).
 
 ---
 
 ## 3. Banco de dados
 
-**Postgres no Render** (plano basic-256mb, ~US$ 7/mês) em vez do SQLite atual:
-backup automático diário, recuperação, e não depende de um disco preso a um
-serviço. ⚖️ custo. O registro do piloto migra para ele.
+**Postgres no Render** (~US$ 7/mês ⚖️), com backup diário. O registro do
+piloto (hoje em SQLite) migra para ele.
 
-Campos com sufixo `_cifrado` guardam texto cifrado (`bytea`). Datas em UTC;
-"dia" e "hora de enviar" calculados no fuso de Brasília.
+### 3.1 Princípio: história acumulativa
+
+Nada do que o cuidador(a) informa é sobrescrito. Cada informação é **um
+registro com data**: "pesou 4,2 kg em 03/10" e "pesou 5,1 kg em 03/11" são
+duas linhas. O valor "atual" é o mais recente. Correção é uma linha nova que
+aponta para a que substitui (`substitui_id`) — a errada continua lá, marcada,
+o que deixa claro o que foi dito e quando.
+
+Exceção: o que **não muda** com o tempo (data de nascimento, sexo) fica na
+linha do bebê; se for corrigido, a correção vai para o histórico de
+correções.
+
+### 3.2 Tabelas
+
+Campos `_cifrado` são texto cifrado (`bytea`). Datas em UTC; "dia" e "hora de
+enviar" no fuso de Brasília.
 
 ```sql
 -- Quem conversa. Uma conta por número de WhatsApp.
-CREATE TABLE contas (
-  id                 uuid PRIMARY KEY,
-  telefone_hash      text UNIQUE NOT NULL,        -- HMAC; para achar a conta
-  telefone_cifrado   bytea,                       -- só com consentimento de lembretes
-  nome_preferido_cifrado bytea,                   -- como ela quer ser chamada (opcional)
-  gestante           boolean NOT NULL DEFAULT false,
-  data_provavel_parto date,                       -- se gestante
-  criada_em          timestamptz NOT NULL DEFAULT now(),
-  ultima_mensagem_em timestamptz NOT NULL DEFAULT now()   -- base da retenção
+CREATE TABLE cuidadores (
+  id                     uuid PRIMARY KEY,
+  telefone_hash          text UNIQUE NOT NULL,   -- HMAC, para achar a conta
+  telefone_cifrado       bytea,                  -- só com consentimento de lembretes
+  nome_preferido_cifrado bytea,                  -- como quer ser chamado(a); opcional
+  relacao                text CHECK (relacao IN
+                           ('mae','pai','responsavel_legal','outro')),
+  ano_nascimento_mae     smallint,               -- idade da mãe, mesmo quando quem fala é outra pessoa
+  gestante               boolean NOT NULL DEFAULT false,
+  data_provavel_parto    date,
+  criado_em              timestamptz NOT NULL DEFAULT now(),
+  ultima_mensagem_em     timestamptz NOT NULL DEFAULT now()  -- base da retenção
 );
 
--- Prova de consentimento. Nunca apagada junto com a conta: é o que mostra
--- que pedimos, o que ela respondeu e quando retirou.
+-- Prova de consentimento. Sobrevive à exclusão da conta, sem conteúdo.
 CREATE TABLE consentimentos (
-  id             bigserial PRIMARY KEY,
-  telefone_hash  text NOT NULL,                   -- sobrevive à exclusão da conta
-  finalidade     text NOT NULL CHECK (finalidade IN
-                   ('atendimento','memoria','lembretes','melhoria')),
-  versao_texto   text NOT NULL,                   -- qual texto ela leu (ex.: 'memoria-v1')
-  concedido_em   timestamptz NOT NULL,
-  revogado_em    timestamptz,
-  evidencia      text NOT NULL                    -- id da mensagem do WhatsApp com o "sim"
+  id            bigserial PRIMARY KEY,
+  telefone_hash text NOT NULL,
+  finalidade    text NOT NULL CHECK (finalidade IN
+                  ('atendimento','memoria','lembretes','melhoria')),
+  versao_texto  text NOT NULL,                   -- 'memoria-v1': qual texto foi lido
+  concedido_em  timestamptz NOT NULL,
+  revogado_em   timestamptz,
+  evidencia     text NOT NULL                    -- id da mensagem com o "sim"
 );
 CREATE INDEX ON consentimentos (telefone_hash, finalidade) WHERE revogado_em IS NULL;
 
--- Bebês da conta (gêmeos, segundo filho).
+-- O que não muda: nascimento e sexo.
 CREATE TABLE bebes (
-  id                   uuid PRIMARY KEY,
-  conta_id             uuid NOT NULL REFERENCES contas ON DELETE CASCADE,
-  apelido_cifrado      bytea,                     -- opcional; "a Helena"
-  data_nascimento      date NOT NULL,             -- base de vacinas, consultas e fases
-  semanas_gestacao     smallint,                  -- prematuro muda o calendário
-  alimentacao          text CHECK (alimentacao IN
-                         ('exclusivo','misto','formula','complementar')),
-  observacoes_cifradas bytea,                     -- o que ela contou e importa
-  criado_em            timestamptz NOT NULL DEFAULT now(),
-  atualizado_em        timestamptz NOT NULL DEFAULT now()
+  id                uuid PRIMARY KEY,
+  cuidador_id       uuid NOT NULL REFERENCES cuidadores ON DELETE CASCADE,
+  apelido_cifrado   bytea,                       -- "a Helena"; opcional
+  data_nascimento   date NOT NULL,
+  sexo              text CHECK (sexo IN ('feminino','masculino')),
+  semanas_gestacao  smallint,                    -- prematuridade
+  criado_em         timestamptz NOT NULL DEFAULT now()
 );
 
--- Memória completa. Só com consentimento de memória.
+-- Diário do bebê: uma linha por informação, nunca sobrescrita.
+CREATE TABLE registros_do_bebe (
+  id            bigserial PRIMARY KEY,
+  bebe_id       uuid NOT NULL REFERENCES bebes ON DELETE CASCADE,
+  tipo          text NOT NULL CHECK (tipo IN
+                  ('peso_g','altura_cm','perimetro_cefalico_cm',
+                   'aleitamento','vacina_tomada','observacao')),
+  valor_numero  numeric,                         -- 5100 (g), 58.5 (cm)
+  valor_texto   text,                            -- 'exclusivo','misto','formula','complementar'; código da vacina
+  valor_cifrado bytea,                           -- observação livre
+  referente_a   date NOT NULL,                   -- quando foi medido/aconteceu
+  informado_em  timestamptz NOT NULL DEFAULT now(),
+  origem        text NOT NULL,                   -- 'conversa','pergunta_do_lactai','correcao'
+  substitui_id  bigint REFERENCES registros_do_bebe,  -- correção de um registro anterior
+  CHECK (valor_numero IS NOT NULL OR valor_texto IS NOT NULL OR valor_cifrado IS NOT NULL)
+);
+CREATE INDEX ON registros_do_bebe (bebe_id, tipo, referente_a DESC);
+
+-- Valor atual de cada tipo, ignorando os substituídos.
+CREATE VIEW situacao_atual_do_bebe AS
+SELECT DISTINCT ON (r.bebe_id, r.tipo) r.*
+FROM registros_do_bebe r
+WHERE NOT EXISTS (SELECT 1 FROM registros_do_bebe c WHERE c.substitui_id = r.id)
+ORDER BY r.bebe_id, r.tipo, r.referente_a DESC, r.informado_em DESC;
+
+-- Memória completa da conversa.
 CREATE TABLE mensagens (
   id               bigserial PRIMARY KEY,
-  conta_id         uuid NOT NULL REFERENCES contas ON DELETE CASCADE,
-  autor            text NOT NULL CHECK (autor IN ('mae','lactai')),
+  cuidador_id      uuid NOT NULL REFERENCES cuidadores ON DELETE CASCADE,
+  autor            text NOT NULL CHECK (autor IN ('cuidador','lactai')),
   conteudo_cifrado bytea NOT NULL,
   tipo             text NOT NULL DEFAULT 'texto',  -- texto | audio (transcrito)
-  desfecho         text,                           -- respondido, emergencia... (do pipeline)
+  desfecho         text,
   criada_em        timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX ON mensagens (conta_id, criada_em DESC);
+CREATE INDEX ON mensagens (cuidador_id, criada_em DESC);
 
--- Resumo corrido da história, atualizado a cada ~10 mensagens. É ele, e não
--- a conversa inteira, que vai para o modelo: "memória infinita" sem custo
--- infinito.
+-- Resumo corrido: é ele, não a conversa inteira, que vai para o modelo.
 CREATE TABLE resumos (
-  conta_id        uuid PRIMARY KEY REFERENCES contas ON DELETE CASCADE,
+  cuidador_id     uuid PRIMARY KEY REFERENCES cuidadores ON DELETE CASCADE,
   resumo_cifrado  bytea NOT NULL,
   ate_mensagem_id bigint NOT NULL,
   atualizado_em   timestamptz NOT NULL DEFAULT now()
 );
 
--- Conteúdo de referência: não é dado pessoal. Toda linha passa por revisão
--- de profissional de saúde antes de valer.
-CREATE TABLE calendario (
-  codigo         text PRIMARY KEY,                -- 'vacina_penta_1', 'consulta_6m', 'fase_3m'
-  tipo           text NOT NULL CHECK (tipo IN ('vacina','consulta','fase')),
-  idade_dias     integer NOT NULL,                -- a partir do nascimento
-  titulo         text NOT NULL,                   -- "Pentavalente – 1ª dose"
-  texto          text NOT NULL,                   -- o que vai na mensagem
-  rede           text,                            -- 'sus', 'privada', 'ambas'
-  fonte          text NOT NULL,                   -- "PNI 2026", "Caderneta da Criança 7ª ed."
-  revisado_por   text,                            -- nome e registro do profissional
-  revisado_em    date,
-  ativo          boolean NOT NULL DEFAULT false   -- só vale depois de revisado
+-- Calendário de vacinas (referência, não é dado pessoal). Vem do material
+-- da base (SBIm/SBP, PNI). Versão guardada para saber qual valia quando.
+CREATE TABLE calendario_vacinas (
+  codigo       text PRIMARY KEY,                 -- 'penta_2'
+  nome         text NOT NULL,                    -- 'Pentavalente – 2ª dose'
+  idade_meses  smallint NOT NULL,                -- mesversário em que é aplicada
+  rede         text NOT NULL CHECK (rede IN ('sus','privada','ambas')),
+  versao       text NOT NULL,                    -- 'PNI-2026'
+  ativo        boolean NOT NULL DEFAULT true
 );
 
--- Vacinas e consultas de cada bebê: as previstas pelo calendário e as que a
--- mãe informou que já fez.
-CREATE TABLE marcos_do_bebe (
-  id             bigserial PRIMARY KEY,
-  bebe_id        uuid NOT NULL REFERENCES bebes ON DELETE CASCADE,
-  marco_codigo   text NOT NULL REFERENCES calendario (codigo),
-  data_prevista  date NOT NULL,
-  realizado_em   date,                            -- informado pela mãe
-  UNIQUE (bebe_id, marco_codigo)
-);
-
--- Fila de envio. Gerada a partir de marcos_do_bebe e das mensagens por fase.
+-- Fila de lembretes: um por bebê por mesversário que tem vacina.
 CREATE TABLE lembretes (
-  id             bigserial PRIMARY KEY,
-  conta_id       uuid NOT NULL REFERENCES contas ON DELETE CASCADE,
-  bebe_id        uuid REFERENCES bebes ON DELETE CASCADE,
-  marco_codigo   text REFERENCES calendario (codigo),
-  enviar_em      timestamptz NOT NULL,            -- sempre entre 9h e 19h de Brasília
-  template       text NOT NULL,                   -- modelo aprovado na Meta
-  status         text NOT NULL DEFAULT 'pendente'
-                   CHECK (status IN ('pendente','enviado','falhou','cancelado')),
-  enviado_em     timestamptz,
-  erro           text
+  id          bigserial PRIMARY KEY,
+  bebe_id     uuid NOT NULL REFERENCES bebes ON DELETE CASCADE,
+  idade_meses smallint NOT NULL,
+  enviar_em   timestamptz NOT NULL,              -- mesversário, 9h de Brasília
+  template    text NOT NULL,
+  status      text NOT NULL DEFAULT 'pendente'
+                CHECK (status IN ('pendente','enviado','falhou','cancelado')),
+  enviado_em  timestamptz,
+  erro        text,
+  UNIQUE (bebe_id, idade_meses)                  -- nunca dois avisos do mesmo mês
 );
 CREATE INDEX ON lembretes (enviar_em) WHERE status = 'pendente';
 
--- Toda vez que alguém da equipe lê uma conversa.
+-- Toda leitura de conversa pela equipe.
 CREATE TABLE acessos_da_equipe (
-  id        bigserial PRIMARY KEY,
-  quem      text NOT NULL,
-  conta_id  uuid,                                 -- pode ficar órfão se a conta for apagada
-  acao      text NOT NULL,                        -- 'leu_conversa', 'exportou'
-  motivo    text NOT NULL,                        -- 'revisão clínica semanal'
-  quando    timestamptz NOT NULL DEFAULT now()
+  id          bigserial PRIMARY KEY,
+  quem        text NOT NULL,
+  cuidador_id uuid,
+  acao        text NOT NULL,
+  motivo      text NOT NULL,
+  quando      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Consultas ao e-Lactancia: cache do nível de risco por medicamento.
+-- Não é dado pessoal (não guarda quem perguntou).
+CREATE TABLE elactancia_cache (
+  termo        text PRIMARY KEY,                 -- 'ibuprofeno', normalizado
+  produto      text,                             -- nome no e-Lactancia
+  risco        text,                             -- 'muito_baixo','baixo','alto','muito_alto'
+  url          text,
+  consultado_em timestamptz NOT NULL DEFAULT now()
 );
 ```
 
-Tabelas do piloto que já existem (`convites`, `testadores`, `uso_diario`,
-`gasto_mensal`, `recusas`) passam para o mesmo banco sem mudança.
+Tabelas do piloto (`convites`, `testadores`, `uso_diario`, `gasto_mensal`,
+`recusas`) passam para o mesmo banco sem mudança.
 
-### 3.1 Apagar de verdade
+**Mesversário em dia que não existe** (nasceu em 31/01): o lembrete vai no
+último dia do mês (28/02).
 
-`APAGAR` faz `DELETE FROM contas WHERE id = …`. Bebês, mensagens, resumo,
-marcos e lembretes vão juntos (`ON DELETE CASCADE`). Ficam só
-`consentimentos` (sem conteúdo) e o contador de uso do piloto (sem conteúdo).
-Backups: o Render guarda os diários por 7 dias; depois disso, o dado some
-também deles. A política informa esse prazo.
+### 3.3 Apagar de verdade
+
+`APAGAR` faz `DELETE FROM cuidadores WHERE id = …`. Bebês, diário, mensagens,
+resumo e lembretes vão juntos (`ON DELETE CASCADE`). Ficam só
+`consentimentos` (sem conteúdo) e os contadores do piloto (sem conteúdo).
+Backups do Render somem em 7 dias; a política informa esse prazo.
 
 ---
 
-## 4. Como a memória entra na resposta
+## 4. Estrutura evoluindo sem quebrar (CI/CD)
+
+Os dados vão crescer e a estrutura vai mudar (um campo novo, um tipo de
+registro novo). As regras para isso nunca apagar nem corromper o que já
+está guardado:
+
+1. **Migrações versionadas no repositório:** `migrations/0001_inicial.sql`,
+   `0002_…`. Cada uma roda uma vez só; o banco guarda quais já rodaram
+   (`schema_migrations`). Migração aplicada nunca é editada: corrige-se com
+   outra.
+2. **Aplicadas no deploy, antes do código novo subir:**
+   `preDeployCommand: python -m app.migrar` no `render.yaml`. Se a migração
+   falhar, o deploy para e o código antigo continua no ar.
+3. **Só mudanças aditivas no mesmo deploy** (tabela ou coluna nova, com valor
+   padrão). Remover ou renomear é feito em duas etapas, em deploys
+   separados: primeiro o código para de usar, depois a coluna sai.
+4. **Testadas no CI:** o GitHub Actions sobe um Postgres, aplica todas as
+   migrações do zero, roda os testes e confere que o banco migrado bate com
+   o esperado.
+5. **Tipos de registro novos não pedem migração:** `registros_do_bebe` é
+   genérica (tipo + valor + data). Começar a guardar, por exemplo,
+   "perímetro cefálico" é só aceitar um tipo a mais.
+
+---
+
+## 5. Como a memória entra na resposta
 
 A cada pergunta, o modelo recebe, nesta ordem:
 
-1. **Perfil** (curto, estruturado): "Mãe: Ana. Bebê: Helena, 2 meses e 10 dias,
-   nascida com 39 semanas, peito exclusivo."
+1. **Perfil** (gerado da `situacao_atual_do_bebe`): "Cuidadora: mãe, 31 anos.
+   Bebê: Helena, feminino, 2 meses e 10 dias, nasceu com 39 semanas. Último
+   peso 5,1 kg (03/11). Aleitamento exclusivo desde o nascimento."
 2. **Resumo da história** (até ~300 palavras).
 3. **Últimas 6 trocas**, literais.
 4. A pergunta.
 
-O perfil é atualizado por **pergunta direta**, não por adivinhação: a data
-de nascimento é perguntada uma vez, logo depois do consentimento ("Quando o
-seu bebê nasceu? Pode ser só dia e mês"). Coisas ditas no meio da conversa
-("ele nasceu prematuro, de 35 semanas") são capturadas por uma extração
-automática e **confirmadas com ela** antes de gravar.
+**Capturar dados:** quando a conversa traz uma informação ("ela pesou 5,1
+na consulta de ontem"), uma extração automática propõe o registro e o LactAI
+**confirma antes de gravar**: "Anotei: Helena, 5,1 kg em 25/11. Certo?". A
+data de nascimento é perguntada diretamente, uma vez.
+
+**Responder pelo diário:** perguntas como "quanto ela pesava no mês
+passado?" ou "quais vacinas ela já tomou?" são respondidas a partir do banco,
+não do modelo.
 
 ---
 
-## 5. Lembretes no WhatsApp oficial
+## 6. Lembrete de vacina no mesversário
 
-- Fora da janela de 24 h desde a última mensagem dela, o WhatsApp **só deixa
-  enviar modelos (templates) aprovados pela Meta**. Cada tipo de lembrete vira
-  um modelo, com campos variáveis (nome do bebê, vacina, data).
-- **Custo por mensagem** (cobrado pela Meta no cartão da conta). Lembrete de
-  vacina e de consulta tende a ser categoria *utilidade*; dica por fase tende
-  a ser *marketing*, mais cara. ⚖️ Conferir a tabela atual da Meta para o
-  Brasil antes de ligar.
-- A Meta também exige opt-in para mensagem ativa: é o consentimento
-  `lembretes`.
-- Envio: 9h–19h de Brasília, no máximo 1 lembrete por dia por mãe (agrupa
-  vacinas do mesmo dia), parando sozinho em `PARAR LEMBRETES`.
-- Agendador: uma rodada por hora dentro do próprio agente (como o vigia da
-  conexão), ou um Cron Job do Render.
+- Só para quem disse **sim** à pergunta de lembretes.
+- Só nos mesversários em que há vacina no calendário (ex.: 2, 3, 4, 5, 6, 9,
+  12, 15 meses…). Nos outros meses, nenhuma mensagem.
+- Às 9h de Brasília do dia do mesversário; um aviso por bebê por mês.
+- Fora da janela de 24 h, o WhatsApp só permite **modelo aprovado pela Meta**
+  (categoria *utilidade*), cobrado por mensagem. ⚖️ conferir o preço atual da
+  Meta para o Brasil.
+
+  Modelo proposto (`lembrete_vacina_mesversario`):
+  > Hoje {{1}} completa {{2}} meses! 🎉 Pelo calendário de vacinação, é a vez
+  > de: {{3}}. Leve a caderneta da criança à unidade de saúde. Para não
+  > receber mais estes avisos, responda PARAR LEMBRETES.
+- Agendador: uma rodada por hora dentro do agente (como o vigia da conexão).
+- A pessoa pode responder "já tomou": vira `vacina_tomada` no diário.
 
 ---
 
-## 6. Ordem de entrega
+## 7. Medicamento e amamentação (e-Lactancia)
 
-| Fase | Entrega | Depende de |
-|---|---|---|
-| **1. Fundação LGPD** | Postgres, contas, consentimentos, criptografia, `MEUS DADOS` / `APAGAR`, política nova | Decisões ⚖️ 2.5, 2.6 e banco |
-| **2. Memória** | Conversa guardada, resumo, perfil no prompt | Fase 1 |
-| **3. Perfil do bebê** | Pergunta da data de nascimento, gestante/DPP, prematuridade | Fase 2 |
-| **4. Calendário** | Vacinas (PNI) e consultas de puericultura revisadas | **Revisão de profissional de saúde** |
-| **5. Lembretes** | Modelos aprovados na Meta, agendador, `PARAR LEMBRETES` | Fases 3–4 e aprovação dos modelos |
-| **6. Fases** | Mensagens do que esperar em cada idade | Revisão clínica + custo de marketing |
+Fluxo para "posso tomar X amamentando?":
 
-As testadoras atuais recebem a pergunta de consentimento na próxima mensagem
-que mandarem; até responderem, o atendimento segue como hoje.
+1. A resposta sai da base, como hoje (inclui o material de e-Lactancia já
+   presente na base) e com os avisos de segurança.
+2. Em seguida, o LactAI consulta o e-Lactancia pelo nome do medicamento e
+   acrescenta: **"No e-Lactancia, ibuprofeno aparece como *risco muito
+   baixo*. Detalhes: <link>"**.
+3. Se não achar o medicamento, ou o site não responder, a resposta da base sai
+   sozinha. Nunca bloqueia nem atrasa a resposta principal.
+4. Resultado guardado em `elactancia_cache` por 30 dias.
+
+⚠️ **Pendência antes de implementar:** o e-Lactancia (mantido pela APILAM,
+associação sem fins lucrativos) **não tem API pública documentada**, e não
+achei os termos de uso que permitam consulta automática num produto pago.
+Caminhos, do mais seguro ao menos:
+
+- **Pedir autorização à APILAM** (apilam.es@gmail.com) para consulta
+  automática, explicando o uso. É o recomendado.
+- Enquanto isso, **só o link**: a resposta traz o link de busca do
+  e-Lactancia para a pessoa conferir lá, sem o LactAI ler o site.
+
+---
+
+## 8. Ordem de entrega
+
+| Fase | Entrega |
+|---|---|
+| **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR`, política nova |
+| **2. Memória** | Conversa guardada, resumo, perfil no prompt |
+| **3. Diário do bebê** | Nascimento, sexo, relação, idade da mãe, peso/altura/aleitamento acumulativos, confirmação antes de gravar, perguntas respondidas pelo diário |
+| **4. Vacinas** | Calendário, pergunta de lembretes, modelo na Meta, agendador, `PARAR LEMBRETES` |
+| **5. e-Lactancia** | Link na resposta (já); consulta do risco depois da autorização |
+
+As testadoras atuais recebem a pergunta de consentimento na próxima mensagem;
+até responderem, o atendimento segue como hoje.

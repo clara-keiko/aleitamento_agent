@@ -100,7 +100,11 @@ class TestQuestionario:
     def test_comeca_logo_depois_do_sim(self, memoria):
         pipeline, channel, _ = montar(memoria)
         conversar(pipeline, "oi", "1")
-        assert "Você é:" in channel.sent[-1][1]
+        pergunta = channel.sent[-1][1]
+        assert "Você é:" in pergunta
+        assert "4 – Outra pessoa\n" in pergunta
+        # O aviso da LGPD vem antes da escolha, não só depois.
+        assert "não guardo informações sobre o bebê" in pergunta
 
     def test_fluxo_completo_grava_tudo_e_resume(self, memoria, banco):
         pipeline, channel, _ = montar(memoria)

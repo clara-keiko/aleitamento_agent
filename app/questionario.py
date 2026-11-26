@@ -42,8 +42,10 @@ TEXTO = {
         "Para eu te conhecer melhor, umas perguntas rápidas — leva menos de "
         "um minuto. Pode responder *PULAR* em qualquer uma, ou *PARAR* para "
         "continuar outra hora.\n\n"
-        "*Você é:*\n1 – Mãe\n2 – Pai\n3 – Responsável legal\n"
-        "4 – Outra pessoa (avó, tia, babá…)"
+        "*Você é:*\n1 – Mãe\n2 – Pai\n3 – Responsável legal\n4 – Outra pessoa\n\n"
+        "_Se você não for mãe, pai ou responsável legal, continuo te atendendo "
+        "normalmente, mas não guardo informações sobre o bebê: a lei de proteção "
+        "de dados (LGPD) só permite isso com a autorização deles._"
     ),
     "fase": "*O bebê já nasceu?*\n1 – Ainda não, a gestação está em andamento\n2 – Já nasceu",
     "dpp": "*Qual a data prevista para o parto?* (ex.: 15/03/2027)",

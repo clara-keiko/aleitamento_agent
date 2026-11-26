@@ -79,6 +79,21 @@ class Settings:
         default_factory=lambda: _env_int("EVOLUTION_SEND_DELAY_MS", 1200)
     )
 
+    # Memória persistente (ver docs/MEMORIA_E_LEMBRETES.md). Só liga com as
+    # três: banco, chave de cifra e a chave geral. MEMORIA_ATIVA fica falsa
+    # até a política de privacidade nova estar publicada.
+    database_url: str = field(default_factory=lambda: _env("DATABASE_URL"))
+    chave_dados: str = field(default_factory=lambda: _env("CHAVE_DADOS"))
+    memoria_ativa: bool = field(default_factory=lambda: _env_bool("MEMORIA_ATIVA", False))
+    # Sem mensagem por este tempo, a conta fica inativa; inativa por este
+    # outro, é apagada. Pedido de exclusão apaga na hora.
+    retencao_meses_sem_uso: int = field(
+        default_factory=lambda: _env_int("RETENCAO_MESES_SEM_USO", 12)
+    )
+    retencao_meses_inativa: int = field(
+        default_factory=lambda: _env_int("RETENCAO_MESES_INATIVA", 24)
+    )
+
     # De quanto em quanto tempo conferir se o número caiu e religar. 0 desliga.
     vigia_intervalo_s: int = field(default_factory=lambda: _env_int("VIGIA_INTERVALO_S", 120))
 

@@ -15,6 +15,19 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Banco descartável: as migrações rodam do zero a cada teste de banco.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lactai
+          POSTGRES_PASSWORD: lactai
+          POSTGRES_DB: lactai_teste
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://lactai:lactai@localhost:5432/lactai_teste
     steps:
       - uses: actions/checkout@v5
 

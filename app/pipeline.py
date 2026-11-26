@@ -12,6 +12,7 @@ from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.llm import AssistantEngine, fallback_message
 from app.logging_utils import get_logger, pseudonymize
+from app.memoria_persistente import MemoriaPersistente
 from app.memory import ConversationStore, KnownUsers, MessageDeduplicator, RateLimiter
 from app.piloto import (
     AUTORIZADO,
@@ -63,6 +64,7 @@ class MessagePipeline:
         rate_limiter: RateLimiter | None = None,
         known_users: KnownUsers | None = None,
         piloto: RegistroDoPiloto | None = None,
+        memoria: MemoriaPersistente | None = None,
     ):
         self.settings = settings
         self.channel = channel
@@ -79,6 +81,27 @@ class MessagePipeline:
         self.known_users = known_users or KnownUsers()
         self.permitidos = ler_lista_de_permitidos(settings.allowed_senders)
         self.piloto = piloto
+        self.memoria = memoria
+        # Quem já recebeu a pergunta de memória neste processo e ainda não
+        # respondeu. Evita perguntar a cada mensagem; depois de um reinício,
+        # pergunta de novo uma vez, o que é aceitável.
+        self._perguntados: set[str] = set()
+
+    @property
+    def _memoria_ligada(self) -> bool:
+        return (
+            self.memoria is not None
+            and self.settings.memoria_ativa
+            and self.channel.name != "web"
+        )
+
+    def _na_memoria(self, metodo: str, *args, padrao=None):
+        """Banco fora do ar nunca pode impedir uma resposta."""
+        try:
+            return getattr(self.memoria, metodo)(*args)
+        except Exception as exc:  # noqa: BLE001
+            log.error("memória persistente indisponível (%s): %s", metodo, exc)
+            return padrao
 
     def _sender_allowed(self, sender: str) -> bool:
         # O protótipo web usa id de sessão como remetente, não telefone; a
@@ -133,14 +156,20 @@ class MessagePipeline:
             self.channel.send_text(message.sender, guardrails.unsupported_media_message())
             return "nao_suportado"
 
-        if guardrails.is_opt_out(text):
-            self._forget(message.sender)
-            self.channel.send_text(message.sender, guardrails.opt_out_message())
-            return "opt_out"
+        direito = self._direitos_da_titular(message, text)
+        if direito:
+            return direito
+
+        # True/False pela decisão de memória; None se não perguntado ou
+        # se o banco estiver fora (aí segue com a memória curta).
+        consentiu = self._na_memoria("decisao", message.sender) if self._memoria_ligada else None
 
         # Primeiro contato: escopo, aviso de automação e canal de emergência.
         if self.known_users.is_first_contact(message.sender):
-            self.channel.send_text(message.sender, guardrails.welcome_message())
+            self.channel.send_text(
+                message.sender,
+                guardrails.welcome_message() + self._pergunta_de_memoria(message.sender),
+            )
 
         # Triagem clínica antes de tudo: "oi, meu bebê não respira" é
         # emergência, não saudação.
@@ -157,7 +186,10 @@ class MessagePipeline:
         # Saudação ou agradecimento não vai ao modelo: gastaria token e cairia
         # na checagem de fundamentação, devolvendo "não encontrei no material".
         if guardrails.is_small_talk(text):
-            self.channel.send_text(message.sender, guardrails.small_talk_message())
+            self.channel.send_text(
+                message.sender,
+                guardrails.small_talk_message() + self._pergunta_de_memoria(message.sender),
+            )
             return "social"
 
         # Limites só aqui, depois da triagem: emergência, encaminhamento e
@@ -167,7 +199,11 @@ class MessagePipeline:
         if bloqueio:
             return bloqueio
 
-        history = self.conversations.history(message.sender)
+        history = None
+        if consentiu:
+            history = self._na_memoria("historico", message.sender, self.settings.history_turns)
+        if history is None:
+            history = self.conversations.history(message.sender)
         answer = self.engine.answer(text, history=history)
         self._registrar_uso(message.sender, answer)
 
@@ -191,12 +227,86 @@ class MessagePipeline:
             reply += guardrails.safety_note()
         reply += nota_remedio
 
+        desfecho = "respondido_com_nota" if risk.needs_safety_note else "respondido"
+
         # Só guardamos no histórico o que foi efetivamente entregue.
         self.conversations.append(message.sender, "user", text)
         self.conversations.append(message.sender, "assistant", answer.text)
+        if consentiu:
+            self._na_memoria(
+                "registrar_troca", message.sender, text, answer.text,
+                "audio" if message.kind == "audio" else "texto", desfecho,
+            )
 
-        self.channel.send_text(message.sender, reply)
-        return "respondido_com_nota" if risk.needs_safety_note else "respondido"
+        self.channel.send_text(message.sender, reply + self._pergunta_de_memoria(message.sender))
+        return desfecho
+
+    # ------------------------------------------------------------------
+    # Memória persistente e direitos da titular
+    # ------------------------------------------------------------------
+    def _pergunta_de_memoria(self, sender: str) -> str:
+        """A pergunta de consentimento, para ir no fim de uma mensagem.
+
+        Vazia se a memória está desligada, se já houve decisão ou se ela já
+        foi feita a esta pessoa neste processo.
+        """
+        if not self._memoria_ligada or sender in self._perguntados:
+            return ""
+        # Banco fora: sem decisão conhecida, melhor não perguntar agora.
+        if self._na_memoria("decisao", sender, padrao=False) is not None:
+            return ""
+        self._perguntados.add(sender)
+        return "\n\n" + guardrails.memory_consent_question()
+
+    def _direitos_da_titular(self, message: IncomingMessage, text: str) -> str | None:
+        sender = message.sender
+
+        if guardrails.is_delete_command(text):
+            if self._memoria_ligada:
+                self._na_memoria("apagar_tudo", sender)
+            self._forget(sender)
+            self.channel.send_text(sender, guardrails.deleted_message())
+            return "apagou_tudo"
+
+        if guardrails.is_opt_out(text):
+            # Com dados guardados, "sair" apagaria meses de diário do bebê:
+            # pede a confirmação explícita antes.
+            if self._memoria_ligada and self._na_memoria("tem_dados", sender, padrao=False):
+                self.channel.send_text(sender, guardrails.delete_confirmation_request())
+                return "pedido_de_exclusao"
+            self._forget(sender)
+            self.channel.send_text(sender, guardrails.opt_out_message())
+            return "opt_out"
+
+        if guardrails.is_my_data_command(text):
+            dados = self._na_memoria("meus_dados", sender, padrao={}) if self._memoria_ligada else {}
+            self.channel.send_text(sender, guardrails.my_data_message(dados or {}))
+            return "meus_dados"
+
+        if self._memoria_ligada:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None and self._e_resposta_de_memoria(sender, text):
+                self._na_memoria("decidir", sender, resposta, message.message_id)
+                self._perguntados.discard(sender)
+                self.channel.send_text(
+                    sender,
+                    guardrails.memory_consent_yes_message() if resposta
+                    else guardrails.memory_consent_no_message(),
+                )
+                return "memoria_aceita" if resposta else "memoria_recusada"
+        return None
+
+    def _e_resposta_de_memoria(self, sender: str, text: str) -> bool:
+        """"sim" só vale como consentimento se a pergunta estiver no ar.
+
+        Depois de um reinício a lista de perguntados zera; "1" ou "2" de quem
+        nunca decidiu ainda contam, porque não significam outra coisa aqui.
+        """
+        if guardrails.normalize(text).strip(" .!") == "guardar":
+            return True
+        if sender in self._perguntados:
+            return True
+        return text.strip() in {"1", "2"} and self._na_memoria("decisao", sender, padrao=False) is None
 
     # ------------------------------------------------------------------
     # Fase de testes
@@ -239,7 +349,8 @@ class MessagePipeline:
                     sender,
                     guardrails.welcome_message()
                     + "\n\n"
-                    + guardrails.pilot_welcome_message(self.settings.limite_diario_por_pessoa),
+                    + guardrails.pilot_welcome_message(self.settings.limite_diario_por_pessoa)
+                    + self._pergunta_de_memoria(sender),
                 )
                 return "convite_aceito"
             if resultado == ESGOTADO:
@@ -271,7 +382,8 @@ class MessagePipeline:
             numero,
             guardrails.pilot_late_welcome_message(self.settings.limite_diario_por_pessoa)
             + "\n\n"
-            + guardrails.welcome_message(),
+            + guardrails.welcome_message()
+            + self._pergunta_de_memoria(numero),
         )
 
     def _checar_limites(self, sender: str) -> str | None:

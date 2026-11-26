@@ -70,3 +70,29 @@ class VigiaDaConexao:
                 self.verificar()
             except Exception:  # noqa: BLE001 - o vigia não pode morrer
                 log.exception("falha no vigia da conexão")
+
+
+class TarefaPeriodica:
+    """Roda uma função de tempos em tempos numa thread, sem deixá-la morrer."""
+
+    def __init__(self, nome: str, funcao: Callable[[], object], intervalo_s: float):
+        self.nome = nome
+        self.funcao = funcao
+        self.intervalo_s = intervalo_s
+        self._parar = threading.Event()
+
+    def iniciar(self) -> None:
+        threading.Thread(target=self._rodar, name=self.nome, daemon=True).start()
+
+    def parar(self) -> None:
+        self._parar.set()
+
+    def _rodar(self) -> None:
+        # Primeira rodada um minuto depois de subir; depois, a cada intervalo.
+        espera = min(60, self.intervalo_s)
+        while not self._parar.wait(espera):
+            try:
+                self.funcao()
+            except Exception:  # noqa: BLE001 - a tarefa não pode morrer
+                log.exception("falha na tarefa periódica %s", self.nome)
+            espera = self.intervalo_s

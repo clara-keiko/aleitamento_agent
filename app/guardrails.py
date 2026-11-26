@@ -333,6 +333,109 @@ def is_opt_out(text: str) -> bool:
 
 
 # ----------------------------------------------------------------------
+# Memória persistente e direitos da titular (ver app/memoria_persistente.py)
+# ----------------------------------------------------------------------
+DELETE_KEYWORDS = {
+    "apagar", "apagar tudo", "apague tudo", "apagar meus dados",
+    "excluir", "excluir meus dados", "excluir tudo",
+}
+MY_DATA_KEYWORDS = {"meus dados", "quais sao meus dados", "o que voce guardou"}
+_SIM = {"1", "sim", "pode", "pode guardar", "quero", "ok", "aceito", "pode sim", "guardar"}
+_NAO = {"2", "nao", "nao guarde", "nao quero", "nao precisa", "nao, obrigada", "nao obrigada"}
+
+
+def is_delete_command(text: str) -> bool:
+    return normalize(text).strip(" .!") in DELETE_KEYWORDS
+
+
+def is_my_data_command(text: str) -> bool:
+    return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
+
+
+def consent_answer(text: str) -> bool | None:
+    """Resposta à pergunta de memória: True, False ou None (não é resposta)."""
+    resposta = normalize(text).strip(" .!")
+    if resposta in _SIM:
+        return True
+    if resposta in _NAO:
+        return False
+    return None
+
+
+def memory_consent_question() -> str:
+    """Consentimento específico e destacado (LGPD art. 11, I e art. 14).
+
+    Diz o que é guardado, para quê, por quanto tempo e como apagar. Mudou o
+    texto, muda VERSAO_MEMORIA: a prova do consentimento aponta a versão lida.
+    """
+    return (
+        "📒 *Posso guardar nossas conversas?*\n\n"
+        "Assim eu lembro do que você já me contou sobre você e o bebê, e não "
+        "precisa repetir. Isso inclui informações de saúde, que ficam "
+        "protegidas e servem só para te atender.\n\n"
+        "Se você passar 1 ano sem conversar comigo, sua conta fica inativa e é "
+        "apagada 2 anos depois. Para apagar tudo na hora, mande *APAGAR*.\n\n"
+        "*1* – Pode guardar\n"
+        "*2* – Não guarde"
+    )
+
+
+def memory_consent_yes_message() -> str:
+    return (
+        "Combinado! A partir de agora eu lembro das nossas conversas. 💛\n\n"
+        "Para ver o que guardei, mande *MEUS DADOS*. Para apagar tudo, *APAGAR*."
+    )
+
+
+def memory_consent_no_message() -> str:
+    return (
+        "Tudo bem, não vou guardar nada. Continuo respondendo suas dúvidas "
+        "normalmente. Se mudar de ideia, é só mandar *GUARDAR*."
+    )
+
+
+def delete_confirmation_request() -> str:
+    return (
+        "Você quer sair e apagar tudo o que eu guardei (nossas conversas e as "
+        "informações do bebê)? Isso não pode ser desfeito.\n\n"
+        "Para confirmar, mande *APAGAR*."
+    )
+
+
+def deleted_message() -> str:
+    return (
+        "Pronto, apaguei tudo o que estava guardado sobre você e o bebê. "
+        "Se quiser voltar, é só mandar uma mensagem. Cuide-se! 💙"
+    )
+
+
+def my_data_message(dados: dict) -> str:
+    if not dados.get("conta_desde") and not dados.get("consentimentos"):
+        return (
+            "Não tenho nada guardado sobre você: nossas conversas não são "
+            "armazenadas. Para eu passar a lembrar, mande *GUARDAR*."
+        )
+    nomes = {"memoria": "Guardar conversas", "lembretes": "Lembretes de vacina",
+             "melhoria": "Uso para melhorar o serviço"}
+    linhas = ["📒 *O que eu tenho guardado sobre você:*\n"]
+    if dados.get("conta_desde"):
+        linhas.append(f"• Conversas guardadas desde {dados['conta_desde']:%d/%m/%Y}")
+        linhas.append(f"• {dados['mensagens']} mensagens (suas e minhas)")
+        linhas.append(f"• {dados['bebes']} bebê(s), {dados['registros_do_bebe']} anotações")
+    else:
+        linhas.append("• Nenhuma conversa guardada")
+    linhas.append("\n*Suas autorizações:*")
+    for finalidade, decisao in dados.get("consentimentos", {}).items():
+        estado = "sim" if decisao["aceito"] else "não"
+        linhas.append(f"• {nomes.get(finalidade, finalidade)}: {estado} ({decisao['em']:%d/%m/%Y})")
+    linhas.append(
+        "\nPara apagar tudo, mande *APAGAR*. Para uma cópia completa, escreva "
+        "para o e-mail da política de privacidade."
+    )
+    return "\n".join(linhas)
+
+
+# ----------------------------------------------------------------------
 # Fase de testes (ver app/piloto.py)
 # ----------------------------------------------------------------------
 # Toda mensagem desta seção que pode chegar a alguém fora do atendimento

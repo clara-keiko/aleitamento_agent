@@ -8,6 +8,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    # Migrações do banco antes do código novo subir. Se falhar, o deploy para
+    # e a versão anterior continua no ar. Ver migrations/0001_memoria.sql.
+    preDeployCommand: python -m app.migrar
     # Convites, testadoras e contadores de uso da fase de testes. Sem disco,
     # cada deploy zeraria tudo e as 30 pessoas perderiam o acesso.
     disk:
@@ -112,3 +115,25 @@ services:
       # Senha do painel /admin/piloto. Veja em Environment, no Render.
       - key: ADMIN_TOKEN
         generateValue: true
+
+      # ── Memória persistente (ver docs/MEMORIA_E_LEMBRETES.md) ──────
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lactai-db
+          property: connectionString
+      # Chave da cifra das conversas. ⚠️ NUNCA apague nem troque: sem ela,
+      # tudo o que foi guardado fica ilegível. Guarde uma cópia num cofre
+      # de senhas.
+      - key: CHAVE_DADOS
+        generateValue: true
+      # Só "true" depois da política de privacidade nova publicada.
+      - key: MEMORIA_ATIVA
+        value: "false"
+
+databases:
+  # Memória do cuidador(a) e diário do bebê. Plano pago: backup diário.
+  - name: lactai-db
+    plan: basic-256mb
+    region: oregon
+    databaseName: lactai
+    user: lactai

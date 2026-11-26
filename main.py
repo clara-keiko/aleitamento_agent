@@ -25,8 +25,10 @@ from app.channels import build_channel
 from app.channels.meta_cloud import MetaCloudChannel
 from app.channels.web import WebChannel
 from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, settings
+from app.cripto import ChaveAusente, Cofre
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
+from app.memoria_persistente import MemoriaPersistente
 from app.piloto import (
     AUTORIZADO,
     CODIGO_INVALIDO,
@@ -37,7 +39,7 @@ from app.piloto import (
     ler_numeros,
 )
 from app.pipeline import MessagePipeline
-from app.vigia import VigiaDaConexao
+from app.vigia import TarefaPeriodica, VigiaDaConexao
 
 configure_logging()
 log = get_logger(__name__)
@@ -67,7 +69,21 @@ def _abrir_registro() -> RegistroDoPiloto:
 
 
 piloto = _abrir_registro()
-pipeline = MessagePipeline(settings, channel, engine, piloto=piloto)
+
+
+def _abrir_memoria() -> MemoriaPersistente | None:
+    """Memória persistente, se houver banco e chave. Sem eles, memória curta."""
+    if not settings.database_url:
+        return None
+    try:
+        return MemoriaPersistente(settings.database_url, Cofre(settings.chave_dados))
+    except ChaveAusente as exc:
+        log.error("%s", exc)
+        return None
+
+
+memoria = _abrir_memoria()
+pipeline = MessagePipeline(settings, channel, engine, piloto=piloto, memoria=memoria)
 
 # Protótipo web: mesmo motor, mesmo pipeline, canal diferente. Ganha o próprio
 # MessagePipeline só para que histórico e rate limit do navegador não se
@@ -102,6 +118,12 @@ def _status_payload() -> dict:
         "missing_for_web": settings.missing_core(),
         "missing_for_whatsapp": settings.missing(),
         "missing_env": missing,
+        # desligada: sem banco/chave; configurada: pronta, esperando
+        # MEMORIA_ATIVA; ligada: guardando para quem consentiu.
+        "memoria": (
+            "desligada" if memoria is None
+            else "ligada" if settings.memoria_ativa else "configurada"
+        ),
         # Via oficial ligada em paralelo em /webhook/meta (ver abaixo).
         "meta_paralela": canal_meta is not None,
         "missing_for_meta": _faltando_para_meta(),
@@ -128,9 +150,27 @@ if isinstance(channel, MetaCloudChannel):
     canal_meta, pipeline_meta = channel, pipeline
 elif settings.web_ready and not _faltando_para_meta():
     canal_meta = MetaCloudChannel(settings)
-    pipeline_meta = MessagePipeline(settings, canal_meta, engine, piloto=piloto)
+    pipeline_meta = MessagePipeline(settings, canal_meta, engine, piloto=piloto, memoria=memoria)
 else:
     canal_meta = pipeline_meta = None
+
+
+if memoria is not None:
+    zelador = TarefaPeriodica(
+        "retencao",
+        lambda: memoria.aplicar_retencao(
+            settings.retencao_meses_sem_uso, settings.retencao_meses_inativa
+        ),
+        intervalo_s=6 * 3600,
+    )
+
+    @app.on_event("startup")
+    def _ligar_retencao() -> None:
+        zelador.iniciar()
+
+    @app.on_event("shutdown")
+    def _desligar_retencao() -> None:
+        zelador.parar()
 
 
 if settings.provider == PROVIDER_EVOLUTION and settings.ready:

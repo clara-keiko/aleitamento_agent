@@ -99,14 +99,22 @@ Perguntas, cada uma num momento:
   quem consentiu `melhoria`, sem identificação, e **cada acesso registrado**.
 - **Logs:** continuam sem conteúdo.
 
-### 2.5 Retenção ⚖️
+### 2.5 Retenção (decidido em 26/11/2026)
 
-| Dado | Prazo proposto |
+| Situação | O que acontece |
 |---|---|
-| Conversa, resumo, perfil, diário do bebê | Enquanto houver uso; **apagado após 24 meses sem mensagem** |
-| Lembretes enviados | 90 dias, depois só a contagem |
+| Em uso | Tudo guardado |
+| **12 meses sem nenhuma mensagem** | Conta fica **inativa**: nada é apagado, e voltar a escrever reativa tudo |
+| **Assinatura vencida** (não pagou) | Perde a assinatura; a conta fica inativa, sem apagar |
+| **Inativa há 24 meses** | Apagada (conversa, perfil, diário do bebê) |
+| **Pedido de exclusão** (`APAGAR`, ou `SAIR` confirmado) | Apagada **na hora** — é direito da titular (art. 18, VI) |
 | Prova de consentimento/revogação | 5 anos após o fim, sem conteúdo |
 | Registro de acesso da equipe | 2 anos |
+
+O prazo vai escrito na própria pergunta de consentimento e na política de
+privacidade, porque guardar depois que a pessoa para de usar só se sustenta
+com transparência. Implementado em `MemoriaPersistente.aplicar_retencao`,
+que roda a cada 6 horas (`RETENCAO_MESES_SEM_USO`, `RETENCAO_MESES_INATIVA`).
 
 ### 2.6 Fora do código ⚖️
 
@@ -373,8 +381,8 @@ permitam uso automatizado num produto pago.
 
 | Fase | Entrega |
 |---|---|
-| **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR`, política nova |
-| **2. Memória** | Conversa guardada, resumo, perfil no prompt |
+| **1. Fundação** | Postgres, migrações no deploy e no CI, cuidadores, consentimentos, criptografia, `MEUS DADOS` / `APAGAR` — **feito, desligado até a política nova** (`MEMORIA_ATIVA`) |
+| **2. Memória** | Conversa guardada e usada como histórico — **feito**; resumo e perfil no prompt — a fazer |
 | **3. Diário do bebê** | Nascimento, sexo, relação, idade da mãe, peso/altura/aleitamento acumulativos, confirmação antes de gravar, perguntas respondidas pelo diário |
 | **4. Vacinas** | Calendário, pergunta de lembretes, modelo na Meta, agendador, `PARAR LEMBRETES` |
 | **5. e-Lactancia** | Indicação do site nas perguntas sobre remédio — **feito** |

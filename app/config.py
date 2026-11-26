@@ -189,6 +189,10 @@ class Settings:
     custo_busca_usd: float = field(
         default_factory=lambda: _env_float("CUSTO_BUSCA_USD", 0.0025)
     )
+    # Busca na web das perguntas de vacina (web_search): US$ 10 por mil.
+    custo_busca_web_usd: float = field(
+        default_factory=lambda: _env_float("CUSTO_BUSCA_WEB_USD", 0.01)
+    )
     # Onde ficam convites e contadores. Em produção, num disco persistente.
     db_path: str = field(default_factory=lambda: _env("DB_PATH", "data/lactai.db"))
     # Senha do painel /admin/piloto. Vazia = painel desligado.

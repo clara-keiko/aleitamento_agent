@@ -194,6 +194,31 @@ MEDICATION_PATTERNS = [
 ]
 
 
+# Pergunta de vacina: vai para a busca nos sites oficiais (SUS e SBIm), não
+# para a base. "Hepatite" sozinha fica de fora: pode ser a mãe com hepatite
+# perguntando se pode amamentar.
+VACCINE_PATTERNS = [
+    r"\bvacin\w*",
+    r"\bimuniza\w*",
+    r"\b(bcg|pentavalente|hexavalente|rotavirus|pneumococ\w*|meningococ\w*"
+    r"|tetraviral|triplice viral|febre amarela|calendario vacinal)\b",
+]
+
+
+def is_vaccine_question(text: str) -> bool:
+    return _matches(VACCINE_PATTERNS, normalize(text))
+
+
+def vaccine_fallback_message() -> str:
+    return (
+        "Não consegui consultar os calendários oficiais agora. 🙈 Você pode "
+        "ver direto nos sites:\n"
+        "• SUS (gratuito): https://www.gov.br/saude/pt-br/vacinacao/calendario\n"
+        "• Rede particular (SBIm): https://sbim.org.br\n\n"
+        "E confira a caderneta na UBS ou com o pediatra."
+    )
+
+
 def is_medication_question(text: str) -> bool:
     return _matches(MEDICATION_PATTERNS, normalize(text))
 

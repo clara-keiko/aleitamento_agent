@@ -256,7 +256,11 @@ class MessagePipeline:
                     "resposta à idade e à situação do bebê; não invente o que "
                     "não está aqui):\n" + perfil,
                 }] + history
-        answer = self.engine.answer(text, history=history)
+        sobre_vacina = guardrails.is_vaccine_question(text)
+        if sobre_vacina:
+            answer = self.engine.answer_vacina(text, history=history)
+        else:
+            answer = self.engine.answer(text, history=history)
         self._registrar_uso(message.sender, answer)
 
         if answer.error:
@@ -269,6 +273,9 @@ class MessagePipeline:
         nota_remedio = guardrails.elactancia_note() if sobre_remedio else ""
 
         if not answer.grounded:
+            if sobre_vacina:
+                self.channel.send_text(message.sender, guardrails.vaccine_fallback_message())
+                return "vacina_sem_fonte"
             self.channel.send_text(
                 message.sender, guardrails.out_of_scope_message() + nota_remedio
             )
@@ -278,6 +285,8 @@ class MessagePipeline:
         if risk.needs_safety_note:
             reply += guardrails.safety_note()
         reply += nota_remedio
+        if sobre_vacina and consentiu:
+            reply += self._sugestao_de_foto(message.sender)
 
         desfecho = "respondido_com_nota" if risk.needs_safety_note else "respondido"
 
@@ -581,8 +590,11 @@ class MessagePipeline:
             self.settings.preco_entrada_usd_1m,
             self.settings.preco_saida_usd_1m,
         )
+        buscas_web = getattr(answer, "buscas_web", 0)
+        if buscas_web:
+            custo += buscas_web * self.settings.custo_busca_web_usd
         # Sem token, a chamada falhou antes de buscar na base.
-        if answer.input_tokens:
+        elif answer.input_tokens:
             custo += self.settings.custo_busca_usd
         self.piloto.registrar_pergunta(None if self.channel.name == "web" else sender, custo)
 
@@ -594,6 +606,23 @@ class MessagePipeline:
             log.error("questionário interrompido: %s", exc)
             self.questionario.encerrar(sender)
             return None
+
+    def _sugestao_de_foto(self, sender: str) -> str:
+        """Depois de uma resposta sobre vacina: a foto da caderneta resolve
+        o "quais ele já tomou?". Só para quem guarda e ainda não mandou."""
+        bebes = (self._na_memoria("perfil", sender) or {}).get("bebes") or []
+        if not bebes:
+            return (
+                "\n\n📷 Quer que eu anote as vacinas que o bebê já tomou? Mande "
+                "*PERFIL* (para eu saber a data de nascimento) e depois uma foto "
+                "da página de vacinas da caderneta."
+            )
+        if bebes[0].get("vacinas"):
+            return ""
+        return (
+            "\n\n📷 Dica: mande uma *foto da página de vacinas da caderneta* que "
+            "eu anoto as que o bebê já tomou."
+        )
 
     def _oferecer_atualizacao(self, sender: str, text: str) -> str | None:
         informacao = ler_informacao_avulsa(text)

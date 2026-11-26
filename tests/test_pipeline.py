@@ -41,6 +41,11 @@ class FakeEngine:
         self.calls.append((text, history or []))
         return self.answer_value
 
+    def answer_vacina(self, text, history=None):
+        self.calls.append((text, history or []))
+        self.vacina_calls = getattr(self, "vacina_calls", 0) + 1
+        return self.answer_value
+
     def transcribe(self, audio, mime="audio/ogg"):
         return self.transcript
 

@@ -61,6 +61,41 @@ Forma:
 - É WhatsApp: nada de títulos, markdown pesado ou texto longo demais.
 """
 
+# Vacina: só os sites oficiais, consultados na hora. Calendário muda todo
+# ano (às vezes no meio do ano), e o material da base envelhece; por isso a
+# pergunta de vacina não usa a base e busca direto no Ministério da Saúde
+# (o que o SUS oferece) e na SBIm (o que a rede particular oferece).
+DOMINIOS_VACINA = ["www.gov.br", "sbim.org.br"]
+
+VACINA_PROMPT = """\
+Você responde dúvidas sobre vacinação de bebês, crianças e gestantes, \
+dentro de um serviço de apoio materno-infantil.
+
+Fontes:
+- Use SOMENTE a busca na web, que está limitada ao site do Ministério da \
+Saúde (gov.br/saude) e ao da SBIm (sbim.org.br). Sempre busque antes de \
+responder. Não use nenhum outro conhecimento: calendários mudam, e só vale \
+o que está publicado nesses sites agora. Prefira a versão mais recente.
+
+Estrutura (sempre, nesta ordem):
+*No SUS (gratuito):* o que o Calendário Nacional de Vacinação do Ministério \
+da Saúde prevê, com a fonte do gov.br.
+*Na rede particular:* o que a SBIm recomenda a mais ou diferente, com a \
+fonte da SBIm.
+Se uma das partes não tiver a informação nos sites, diga isso nela.
+
+Limites:
+- Se o contexto trouxer a idade do bebê, foque nessa idade.
+- Não diga que a vacinação está em dia ou atrasada: oriente conferir a \
+caderneta na UBS ou com o pediatra.
+- Não oriente conduta para reação à vacina; diante de reação forte, oriente \
+procurar atendimento.
+- Você não grava nem anota nada e não avisa ninguém; nunca diga que fez isso.
+
+Forma: português do Brasil, acolhedor e direto; é WhatsApp, até 10 linhas \
+curtas, listas simples, sem títulos.
+"""
+
 # Áudio de voz é opus (~8 KB/s). Teto generoso, só para barrar arquivo absurdo.
 AUDIO_BYTES_PER_SECOND = 16_000
 OPENAI_AUDIO_LIMIT_BYTES = 25 * 1024 * 1024
@@ -94,6 +129,8 @@ class Answer:
     # Quantos trechos da base foram efetivamente citados. Serve para separar
     # "respondeu com o material" de "respondeu com um trecho solto".
     citations: int = 0
+    # Buscas na web feitas (só nas perguntas de vacina); cobradas à parte.
+    buscas_web: int = 0
 
 
 class AssistantEngine:
@@ -195,6 +232,38 @@ class AssistantEngine:
             citations=citacoes,
         )
 
+    def answer_vacina(self, user_text: str, history: list[dict] | None = None) -> Answer:
+        """Pergunta de vacina: busca na hora no gov.br e na SBIm, sem a base."""
+        messages = [{"role": "system", "content": VACINA_PROMPT}]
+        messages.extend(history or [])
+        messages.append({"role": "user", "content": user_text})
+        parametros = {
+            "model": self.settings.openai_model,
+            "input": messages,
+            "tools": [{"type": "web_search", "filters": {"allowed_domains": DOMINIOS_VACINA}}],
+            "max_output_tokens": self.teto_de_saida,
+        }
+        if self.raciocina:
+            parametros["reasoning"] = {"effort": self.settings.reasoning_effort}
+        try:
+            response = self.client.responses.create(**parametros)
+        except Exception as exc:  # noqa: BLE001 - OpenAIError, rede, serialização
+            log.error("erro na busca de vacina: %s", exc)
+            return Answer(text="", grounded=False, error=True)
+
+        text = limpar_marcas_de_citacao(getattr(response, "output_text", "") or "")
+        entrada, saida = token_usage(response)
+        fontes = count_url_citations(response, DOMINIOS_VACINA)
+        return Answer(
+            text=text,
+            grounded=bool(text) and fontes > 0,
+            error=not text,
+            input_tokens=entrada,
+            output_tokens=saida,
+            citations=fontes,
+            buscas_web=count_web_searches(response),
+        )
+
     # ------------------------------------------------------------------
     # Foto da caderneta
     # ------------------------------------------------------------------
@@ -285,6 +354,38 @@ def count_file_citations(response) -> int:
                 if kind == "file_citation":
                     total += 1
     return total
+
+
+def _anotacoes(response):
+    for item in getattr(response, "output", None) or []:
+        for content in getattr(item, "content", None) or []:
+            yield from getattr(content, "annotations", None) or []
+
+
+def _campo(objeto, nome):
+    valor = getattr(objeto, nome, None)
+    if valor is None and isinstance(objeto, dict):
+        valor = objeto.get(nome)
+    return valor
+
+
+def count_url_citations(response, dominios: list[str]) -> int:
+    """Citações de páginas dos domínios permitidos (e subdomínios)."""
+    total = 0
+    for anotacao in _anotacoes(response):
+        if _campo(anotacao, "type") != "url_citation":
+            continue
+        host = re.sub(r"^https?://", "", _campo(anotacao, "url") or "").split("/")[0]
+        if any(host == d or host.endswith("." + d.removeprefix("www.")) for d in dominios):
+            total += 1
+    return total
+
+
+def count_web_searches(response) -> int:
+    return sum(
+        1 for item in getattr(response, "output", None) or []
+        if _campo(item, "type") == "web_search_call"
+    )
 
 
 def has_file_citations(response) -> bool:

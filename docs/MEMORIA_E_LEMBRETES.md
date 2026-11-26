@@ -118,7 +118,7 @@ que roda a cada 6 horas (`RETENCAO_MESES_SEM_USO`, `RETENCAO_MESES_INATIVA`).
 
 ### 2.6 Fora do código ⚖️
 
-- **Encarregada** de dados: Clara (clara@watanabeaitech.com.br), publicada na política — **feito**.
+- **Encarregada** de dados: Clara Watanabe (clara@watanabeaitech.com.br — ⚠️ domínio a confirmar), publicada na política — **feito**.
 - **Política de privacidade** nova (finalidades, prazos, operadores) em
   `app/static/privacidade.html` — **feito** (novembro de 2026).
 - **Transferência internacional** declarada: OpenAI, Meta, Render (EUA).

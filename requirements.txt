@@ -5,5 +5,5 @@ requests==2.32.3
 openai==2.48.0
 python-dotenv==1.0.1
 # Memória persistente (Postgres) e cifra dos campos sensíveis.
-psycopg[binary]==3.2.3
+psycopg[binary]==3.2.13
 cryptography==43.0.3

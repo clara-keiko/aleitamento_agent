@@ -21,7 +21,12 @@ from app.piloto import (
     custo_da_resposta,
     encontrar_codigo,
 )
-from app.questionario import Questionario, descrever_perfil
+from app.questionario import (
+    Questionario,
+    descrever_atualizacao,
+    descrever_perfil,
+    ler_informacao_avulsa,
+)
 
 log = get_logger(__name__)
 
@@ -94,6 +99,8 @@ class MessagePipeline:
         # Leitura da caderneta esperando "1" para ser gravada:
         # número -> (bebê, vacinas lidas, quando).
         self._cadernetas_pendentes: dict[str, tuple] = {}
+        # Dado solto esperando "1": número -> (tipo, valor, bebê, quando).
+        self._atualizacoes_pendentes: dict[str, tuple] = {}
         # Pedidos de exclusão esperando CONFIRMAR: número -> quando pediu.
         self._exclusoes_pendentes: dict[str, float] = {}
 
@@ -208,6 +215,14 @@ class MessagePipeline:
             if seguinte:
                 self.channel.send_text(message.sender, seguinte)
                 return "questionario"
+
+        # "Ela pesou 5,2 kg", "tenho 33 anos": dado de perfil dito de
+        # passagem. O modelo não grava nada (e chegou a fingir que gravou);
+        # aqui o serviço oferece atualizar, com confirmação.
+        if consentiu:
+            oferta = self._oferecer_atualizacao(message.sender, text)
+            if oferta:
+                return oferta
 
         # Saudação ou agradecimento não vai ao modelo: gastaria token e cairia
         # na checagem de fundamentação, devolvendo "não encontrei no material".
@@ -328,6 +343,32 @@ class MessagePipeline:
                     return "erro_memoria"
                 self.channel.send_text(sender, caderneta.mensagem_anotadas(*anotadas))
                 return "vacinas_anotadas"
+
+        # Resposta à confirmação de um dado dito de passagem.
+        atualizacao = self._atualizacoes_pendentes.get(sender)
+        if atualizacao and time.monotonic() - atualizacao[3] < CONFIRMACAO_VALE_S:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None:
+                self._atualizacoes_pendentes.pop(sender, None)
+                if not resposta:
+                    self.channel.send_text(sender, "Combinado, não alterei nada.")
+                    return "atualizacao_recusada"
+                tipo, valor, bebe_id, _ = atualizacao
+                hoje = self.questionario._hoje()
+                if tipo == "idade_mae":
+                    feito = self._na_memoria(
+                        "salvar_ano_nascimento_mae", sender, hoje.year - int(valor), padrao=False
+                    )
+                else:
+                    feito = self._na_memoria(
+                        "registrar_do_bebe", bebe_id, tipo, hoje, valor, None, "conversa",
+                        padrao=False,
+                    )
+                if feito is False:
+                    self.channel.send_text(sender, fallback_message())
+                    return "erro_memoria"
+                self.channel.send_text(sender, "Atualizado! ✅ Para ver tudo, *MEUS DADOS*.")
+                return "perfil_atualizado"
 
         # "parar" no meio do questionário é parar o questionário, não sair do
         # serviço: precisa ser visto antes do SAIR/PARAR geral.
@@ -554,6 +595,32 @@ class MessagePipeline:
             self.questionario.encerrar(sender)
             return None
 
+    def _oferecer_atualizacao(self, sender: str, text: str) -> str | None:
+        informacao = ler_informacao_avulsa(text)
+        if not informacao:
+            return None
+        tipo, valor = informacao
+        perfil = self._na_memoria("perfil", sender) or {}
+        bebe_id = None
+        if tipo == "idade_mae":
+            # "Tenho 33 anos" só é a idade da mãe se quem fala é a mãe.
+            if perfil.get("relacao") != "mae":
+                return None
+        else:
+            if perfil.get("relacao") not in ("mae", "pai", "responsavel_legal"):
+                return None
+            bebes = perfil.get("bebes") or []
+            if not bebes:
+                return None
+            bebe_id = bebes[0]["id"]
+        self._atualizacoes_pendentes[sender] = (tipo, valor, bebe_id, time.monotonic())
+        descricao = descrever_atualizacao(tipo, valor, self.questionario._hoje())
+        self.channel.send_text(
+            sender,
+            f"Quer que eu atualize o seu perfil?\n• {descricao}\n\n1 – Sim\n2 – Não",
+        )
+        return "oferta_de_atualizacao"
+
     def _foto(self, message: IncomingMessage) -> str:
         """Foto: só a página de vacinas da caderneta, e só para quem guarda."""
         sender = message.sender
@@ -613,6 +680,7 @@ class MessagePipeline:
         if self.questionario:
             self.questionario.encerrar(sender)
         self._cadernetas_pendentes.pop(sender, None)
+        self._atualizacoes_pendentes.pop(sender, None)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""

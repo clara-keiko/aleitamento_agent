@@ -212,3 +212,78 @@ class TestQuestionario:
 
 def test_descrever_perfil_vazio():
     assert descrever_perfil(None, HOJE) == ""
+
+
+class TestInformacaoAvulsa:
+    @pytest.mark.parametrize("texto,esperado", [
+        ("tenho 33 anos", ("idade_mae", 33)),
+        ("Eu tenho 28 anos", ("idade_mae", 28)),
+        ("ela pesou 5,2 kg ontem", ("peso_g", 5200)),
+        ("está com 6 quilos", ("peso_g", 6000)),
+        ("pesou 5200 g na consulta", ("peso_g", 5200)),
+        ("ele mede 60 cm", ("altura_cm", 60)),
+        ("na consulta mediu 58,5 cm", ("altura_cm", 58.5)),
+    ])
+    def test_reconhece(self, texto, esperado):
+        from app.questionario import ler_informacao_avulsa
+
+        assert ler_informacao_avulsa(texto) == esperado
+
+    @pytest.mark.parametrize("texto", [
+        "ela pesa 5 kg, é normal?",
+        "tenho 2 filhos",
+        "quantos quilos ela deveria ter com 3 meses",
+        "como melhorar a pega?",
+    ])
+    def test_ignora(self, texto):
+        from app.questionario import ler_informacao_avulsa
+
+        assert ler_informacao_avulsa(texto) is None
+
+    def _com_perfil(self, memoria):
+        pipeline, channel, engine = montar(memoria)
+        conversar(pipeline, "oi", "1", "1", "2", "15/09/2026", "parar")
+        return pipeline, channel, engine
+
+    def test_tenho_33_anos_pergunta_antes_e_grava_com_1(self, memoria):
+        pipeline, channel, engine = self._com_perfil(memoria)
+        chamadas = len(engine.calls)
+        conversar(pipeline, "tenho 33 anos")
+        assert "Quer que eu atualize o seu perfil?" in channel.sent[-1][1]
+        assert "33 anos" in channel.sent[-1][1]
+        assert len(engine.calls) == chamadas  # não foi ao modelo
+        assert memoria.perfil(NUMERO)["ano_nascimento_mae"] is None
+        conversar(pipeline, "1")
+        assert "Atualizado" in channel.sent[-1][1]
+        assert memoria.perfil(NUMERO)["ano_nascimento_mae"] == 1993
+
+    def test_peso_acumula_no_diario(self, memoria):
+        pipeline, channel, _ = self._com_perfil(memoria)
+        conversar(pipeline, "ela pesou 5,2 kg", "1")
+        assert memoria.perfil(NUMERO)["bebes"][0]["peso_g"][0] == 5200
+
+    def test_2_nao_altera(self, memoria):
+        pipeline, channel, _ = self._com_perfil(memoria)
+        conversar(pipeline, "tenho 33 anos", "2")
+        assert "não alterei" in channel.sent[-1][1]
+        assert memoria.perfil(NUMERO)["ano_nascimento_mae"] is None
+
+    def test_pai_dizendo_a_propria_idade_nao_vira_idade_da_mae(self, memoria):
+        pipeline, channel, engine = montar(memoria)
+        conversar(pipeline, "oi", "1", "2", "2", "15/09/2026", "parar")
+        chamadas = len(engine.calls)
+        conversar(pipeline, "tenho 35 anos")
+        assert len(engine.calls) == chamadas + 1  # segue para o modelo, sem oferta
+
+    def test_sem_autorizacao_nao_oferece(self, memoria):
+        memoria.decidir(NUMERO, False, "w0")
+        pipeline, channel, engine = montar(memoria)
+        conversar(pipeline, "tenho 33 anos")
+        assert "Quer que eu atualize" not in channel.bodies
+
+
+def test_prompt_proibe_fingir_que_gravou():
+    from app.llm import SYSTEM_PROMPT
+
+    assert "Nunca diga \"registrei\"" in SYSTEM_PROMPT
+    assert "PERFIL" in SYSTEM_PROMPT

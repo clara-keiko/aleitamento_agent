@@ -342,3 +342,50 @@ def descrever_perfil(perfil: dict | None, hoje: dt.date) -> str:
             anotadas = "; ".join(f"{r} ({d:%d/%m/%Y})" for r, d in bebe["vacinas"])
             linhas.append(f"Vacinas anotadas (lidas da caderneta, conferidas pela pessoa): {anotadas}")
     return "\n".join(linhas)
+
+
+# ----------------------------------------------------------------------
+# Informação solta no meio da conversa ("ela pesou 5,2 kg ontem")
+# ----------------------------------------------------------------------
+
+_IDADE = re.compile(r"\b(?:eu )?tenho (\d{2}) anos\b")
+_PESO = re.compile(
+    r"\b(?:pesou|pesa|pesando|peso|esta com|ta com)\D{0,12}?(\d+(?:[.,]\d+)?)\s*"
+    r"(kg|kilos?|quilos?|g|gramas)\b"
+)
+_COMPRIMENTO = re.compile(
+    r"\b(?:mede|medindo|mediu|comprimento|altura|tamanho)\D{0,15}?(\d+(?:[.,]\d+)?)\s*"
+    r"(cm|centimetros?)\b"
+)
+
+
+def ler_informacao_avulsa(texto: str) -> tuple[str, float] | None:
+    """Dado de perfil dito de passagem, em frase curta e sem pergunta.
+
+    Devolve (tipo, valor): ("idade_mae", anos), ("peso_g", gramas) ou
+    ("altura_cm", cm). Pergunta ("pesa 5 kg, é normal?") não conta: aí a
+    pessoa quer resposta, não cadastro.
+    """
+    if "?" in texto:
+        return None
+    limpo = normalize(texto)
+    if len(limpo) > 80:
+        return None
+    if achado := _IDADE.search(limpo):
+        idade = ler_idade(achado[1])
+        return ("idade_mae", idade) if idade else None
+    if achado := _PESO.search(limpo):
+        gramas = ler_peso_g(f"{achado[1]} {achado[2][0]}")
+        return ("peso_g", gramas) if gramas else None
+    if achado := _COMPRIMENTO.search(limpo):
+        cm = ler_comprimento_cm(achado[1])
+        return ("altura_cm", cm) if cm else None
+    return None
+
+
+def descrever_atualizacao(tipo: str, valor: float, hoje: dt.date) -> str:
+    if tipo == "idade_mae":
+        return f"Sua idade: {int(valor)} anos"
+    if tipo == "peso_g":
+        return f"Peso do bebê: {valor / 1000:.2f} kg em {hoje:%d/%m/%Y}".replace(".", ",", 1)
+    return f"Comprimento do bebê: {valor:g} cm em {hoje:%d/%m/%Y}".replace(".", ",")

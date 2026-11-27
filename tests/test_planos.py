@@ -1,4 +1,4 @@
-"""Planos e limites por pessoa: 10/mês no gratuito, 150/mês no Acompanhada."""
+"""Planos e limites por pessoa: 10/mês no gratuito, 150/mês no LactAI Plus."""
 
 import datetime as dt
 
@@ -61,7 +61,7 @@ class TestGratuito:
         assert perguntar(pipeline) == "limite_mensal"
         aviso = channel.sent[-1][1]
         assert "10 perguntas do plano gratuito" in aviso
-        assert "01/12" in aviso and "Acompanhada" in aviso and "192" in aviso
+        assert "01/12" in aviso and "LactAI Plus" in aviso and "192" in aviso
         assert engine.calls == []
 
     def test_mes_anterior_nao_conta(self, memoria):
@@ -106,7 +106,7 @@ class TestGratuito:
 
 class TestAssinante:
     def test_cento_e_cinquenta_no_ciclo_da_assinatura(self, memoria):
-        memoria.definir_assinatura(NUMERO, "acompanhada", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
+        memoria.definir_assinatura(NUMERO, "plus", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
         usar(memoria, 25, AGORA - dt.timedelta(days=2))
         pipeline, channel, _ = montar(memoria)
         assert perguntar(pipeline) == "respondido"
@@ -115,23 +115,24 @@ class TestAssinante:
         assert situacao.plano.mensal == 150 and situacao.renova_em == dt.date(2026, 12, 20)
 
     def test_uso_antes_do_inicio_do_ciclo_nao_conta(self, memoria):
-        memoria.definir_assinatura(NUMERO, "acompanhada", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
+        memoria.definir_assinatura(NUMERO, "plus", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
         usar(memoria, 150, dt.datetime(2026, 11, 19, 12, tzinfo=BRASILIA))
         pipeline, _, _ = montar(memoria)
         assert perguntar(pipeline) == "respondido"
 
     def test_vencida_volta_ao_gratuito(self, memoria):
-        memoria.definir_assinatura(NUMERO, "acompanhada", dt.date(2026, 10, 1), dt.date(2026, 11, 1))
+        memoria.definir_assinatura(NUMERO, "plus", dt.date(2026, 10, 1), dt.date(2026, 11, 1))
         usar(memoria, 10, AGORA - dt.timedelta(days=3))
         pipeline, _, _ = montar(memoria)
         assert perguntar(pipeline) == "limite_mensal"
 
     def test_limite_esgotado_do_assinante_nao_oferece_assinar(self, memoria):
-        memoria.definir_assinatura(NUMERO, "acompanhada", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
+        memoria.definir_assinatura(NUMERO, "plus", dt.date(2026, 11, 20), dt.date(2026, 12, 20))
         usar(memoria, 150, AGORA - dt.timedelta(days=1))
         pipeline, channel, _ = montar(memoria, limite_diario_assinante=1000)
         assert perguntar(pipeline) == "limite_mensal"
         assert "Para assinar" not in channel.sent[-1][1]
+        assert "150 perguntas do LactAI Plus deste mês" in channel.sent[-1][1]
 
 
 class TestDesligado:
@@ -171,7 +172,7 @@ class TestPainel:
 
         r = cliente.post("/admin/piloto/assinatura", headers=senha,
                          data={"numero": "(21) 98181-4170", "pago_ate": "2026-12-27", "acao": "ativar"})
-        assert "Plano Acompanhada ativo para …4170" in r.text
+        assert "LactAI Plus ativo para …4170" in r.text
         assert memoria.assinatura(NUMERO)["pago_ate"] == dt.date(2026, 12, 27)
         assert "Assinaturas ativas: <b>1</b>" in cliente.get("/admin/piloto", headers=senha).text
 

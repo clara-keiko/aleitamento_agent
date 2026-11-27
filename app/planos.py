@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from app.piloto import BRASILIA
 
 GRATUITO = "gratuito"
-ACOMPANHADA = "acompanhada"
+PLUS = "plus"
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ def planos(settings) -> dict[str, Plano]:
     return {
         GRATUITO: Plano(GRATUITO, "gratuito", settings.limite_mensal_gratuito,
                         settings.limite_diario_gratuito),
-        ACOMPANHADA: Plano(ACOMPANHADA, "Acompanhada", settings.limite_mensal_assinante,
+        PLUS: Plano(PLUS, "LactAI Plus", settings.limite_mensal_assinante,
                            settings.limite_diario_assinante),
     }
 
@@ -94,13 +94,15 @@ def _como_assinar(settings) -> str:
 
 
 def mensagem_limite_mensal(s: Situacao, settings) -> str:
+    # "do LactAI Plus", mas "do plano gratuito".
+    nome = s.plano.rotulo if s.plano.nome == PLUS else f"plano {s.plano.rotulo}"
     texto = (
-        f"Você usou as {s.plano.mensal} perguntas do plano {s.plano.rotulo} deste "
-        f"mês. 💛 Elas voltam em {s.renova_em:%d/%m}."
+        f"Você usou as {s.plano.mensal} perguntas do {nome} deste mês. 💛 "
+        f"Elas voltam em {s.renova_em:%d/%m}."
     )
     if s.plano.nome == GRATUITO:
         texto += (
-            f"\n\nCom o plano *Acompanhada* ({settings.preco_assinatura}/mês), são "
+            f"\n\nCom o *LactAI Plus* ({settings.preco_assinatura}/mês), são "
             f"{settings.limite_mensal_assinante} perguntas por mês. {_como_assinar(settings)}"
         )
     return texto + "\n\nEm caso de emergência com o bebê, ligue *192*."

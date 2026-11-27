@@ -134,7 +134,7 @@ services:
       # o modelo lembrete_vacina_mesversario (ver docs/LEMBRETES.md).
       - key: LEMBRETES_ATIVOS
         value: "false"
-      # Planos: gratuito 10/mês (5/dia), Acompanhada 150/mês (30/dia). Só
+      # Planos: gratuito 10/mês (5/dia), LactAI Plus 150/mês (30/dia). Só
       # "true" quando o piloto acabar; até lá vale o limite diário do piloto.
       - key: PLANOS_ATIVOS
         value: "false"

@@ -411,13 +411,13 @@ def _bloco_de_assinaturas() -> str:
     return f"""
 <h2>Planos e assinaturas</h2>
 <p class="sub">Limites por plano: {html.escape(estado)}. Gratuito:
-{settings.limite_mensal_gratuito}/mês e {settings.limite_diario_gratuito}/dia. Acompanhada:
+{settings.limite_mensal_gratuito}/mês e {settings.limite_diario_gratuito}/dia. LactAI Plus:
 {settings.limite_mensal_assinante}/mês e {settings.limite_diario_assinante}/dia.
 Assinaturas ativas: <b>{ativas}</b>.</p>
 <form method="post" action="/admin/piloto/assinatura">
 <p>Número: <input name="numero" placeholder="(21) 99999-0000"></p>
 <p>Pago até (inclusive): <input name="pago_ate" type="date" value="{padrao:%Y-%m-%d}"></p>
-<button type="submit" name="acao" value="ativar">Ativar ou renovar Acompanhada</button>
+<button type="submit" name="acao" value="ativar">Ativar ou renovar LactAI Plus</button>
 <button type="submit" name="acao" value="cancelar">Cancelar assinatura</button>
 </form>"""
 
@@ -451,10 +451,10 @@ async def gerenciar_assinatura(request: Request) -> Response:
     atual = memoria.assinatura(numero)
     # Renovação mantém o dia de início, que é a âncora do ciclo mensal.
     inicio = atual["inicio"] if atual and atual["pago_ate"] >= hoje else hoje
-    memoria.definir_assinatura(numero, "acompanhada", inicio, pago_ate)
+    memoria.definir_assinatura(numero, "plus", inicio, pago_ate)
     log.info("assinatura ativada pelo painel")
     return _pagina_admin("Piloto LactAI", (
-        f"<p>Plano Acompanhada ativo para …{final}, de {inicio:%d/%m/%Y} até "
+        f"<p>LactAI Plus ativo para …{final}, de {inicio:%d/%m/%Y} até "
         f"{pago_ate:%d/%m/%Y}.</p>" + voltar
     ))
 

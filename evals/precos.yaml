@@ -1,0 +1,37 @@
+# Preço em dólares por 1 milhão de tokens.
+#
+# Fica fora do código porque muda com frequência e quem atualiza não precisa
+# ser quem programa. ⚠️ Confirme em platform.openai.com/pricing antes de usar
+# estes números em proposta ou orçamento — a tabela abaixo é de julho de 2026
+# e vem de fontes secundárias.
+#
+# Para avaliar um modelo que não está aqui, acrescente a linha. Sem preço, o
+# eval ainda mede qualidade e latência; só o custo aparece como "sem preço".
+
+gpt-4o-mini:
+  entrada: 0.15
+  saida: 0.60
+
+gpt-4.1-mini:
+  entrada: 0.40
+  saida: 1.60
+
+gpt-4.1:
+  entrada: 2.00
+  saida: 8.00
+
+gpt-5-mini:
+  entrada: 0.25
+  saida: 2.00
+
+gpt-5.4-mini:
+  entrada: 0.75
+  saida: 4.50
+
+gpt-5:
+  entrada: 1.25
+  saida: 10.00
+
+gpt-5.4:
+  entrada: 2.50
+  saida: 15.00

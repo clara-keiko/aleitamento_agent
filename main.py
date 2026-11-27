@@ -34,6 +34,7 @@ from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
 from app.memoria_persistente import MemoriaPersistente
 from app.pagamentos import Cobranca, token_valido
+from app.pagamentos import ambiente as ambiente_asaas
 from app.piloto import (
     AUTORIZADO,
     BRASILIA,
@@ -232,7 +233,7 @@ def _registrar_aviso_do_asaas() -> None:
             settings.asaas_webhook_token,
             "clara@watanabeaitech.com",
         )
-        log.info("asaas (%s): aviso de pagamentos %s", settings.asaas_ambiente, resultado)
+        log.info("asaas (%s): aviso de pagamentos %s", ambiente_asaas(settings), resultado)
     except Exception as exc:  # noqa: BLE001
         log.error("asaas: não consegui cadastrar o aviso de pagamentos: %s", exc)
 

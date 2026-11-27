@@ -106,6 +106,17 @@ class TestAuxiliares:
         assert not token_valido(None, "abc")
         assert not token_valido("", "")  # sem token configurado, nada passa
 
+    @pytest.mark.parametrize("chave,configurado,esperado", [
+        ("$aact_prod_abc", "sandbox", "producao"),
+        ("$aact_hmlg_abc", "producao", "sandbox"),
+        ("outra", "producao", "producao"),
+        ("outra", "qualquer", "sandbox"),
+    ])
+    def test_ambiente_pela_chave(self, chave, configurado, esperado):
+        s = Settings(openai_api_key="k", vector_store_id="vs",
+                     asaas_api_key=chave, asaas_ambiente=configurado)
+        assert pagamentos.ambiente(s) == esperado
+
     def test_base_por_ambiente(self):
         assert "sandbox" in Asaas(configuracao()).base
         prod = Settings(openai_api_key="k", vector_store_id="vs", asaas_ambiente="producao")

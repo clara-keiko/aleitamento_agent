@@ -139,12 +139,12 @@ services:
       - key: PLANOS_ATIVOS
         value: "false"
       # Cobrança do LactAI Plus (app/pagamentos.py), em nome da Watanabe AI
-      # Tech. A chave fica só no painel do Render. "producao" só depois de
-      # testar no sandbox, junto com a chave da conta real.
+      # Tech. A chave fica só no painel do Render; o ambiente sai do prefixo
+      # dela ($aact_prod_ = conta real). Conta real desde 27/11/2026.
       - key: ASAAS_API_KEY
         sync: false
       - key: ASAAS_AMBIENTE
-        value: sandbox
+        value: producao
       # Senha dos avisos de pagamento; o serviço a cadastra no Asaas sozinho.
       - key: ASAAS_WEBHOOK_TOKEN
         generateValue: true

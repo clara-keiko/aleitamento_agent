@@ -37,6 +37,17 @@ def mais_um_mes(dia: dt.date) -> dt.date:
     return dt.date(ano, mes, min(dia.day, calendar.monthrange(ano, mes)[1]))
 
 
+def ambiente(settings) -> str:
+    """A chave diz de que ambiente é ($aact_prod_ ou $aact_hmlg_); só sem
+    prefixo conhecido vale ASAAS_AMBIENTE. Chave e ambiente trocados davam 401."""
+    chave = settings.asaas_api_key or ""
+    if chave.startswith("$aact_prod_"):
+        return "producao"
+    if chave.startswith("$aact_hmlg_"):
+        return "sandbox"
+    return settings.asaas_ambiente if settings.asaas_ambiente in BASES else "sandbox"
+
+
 class ErroDoAsaas(RuntimeError):
     pass
 
@@ -44,7 +55,7 @@ class ErroDoAsaas(RuntimeError):
 class Asaas:
     def __init__(self, settings, post=requests.post, get=requests.get, delete=requests.delete):
         self.settings = settings
-        self.base = BASES.get(settings.asaas_ambiente, BASES["sandbox"])
+        self.base = BASES[ambiente(settings)]
         self._post, self._get, self._delete = post, get, delete
 
     @property

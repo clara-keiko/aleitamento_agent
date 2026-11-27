@@ -134,5 +134,5 @@ O LactAI Plus é cobrado pelo Asaas, em nome da Watanabe AI Tech
 - Na subida, o serviço cadastra o aviso de pagamentos no Asaas sozinho, com a
   senha `ASAAS_WEBHOOK_TOKEN`, que o Render gera.
 - Para ir à conta real: troque `ASAAS_API_KEY` pela chave de produção e
-  `ASAAS_AMBIENTE` para `producao`. Os links do sandbox deixam de valer; cada
+  `ASAAS_AMBIENTE` para `producao` (o prefixo da chave também decide). Os links do sandbox deixam de valer; cada
   pessoa recebe um novo ao mandar ASSINAR.

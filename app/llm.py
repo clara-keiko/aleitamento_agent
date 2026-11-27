@@ -91,16 +91,18 @@ publicado nesses sites agora. Prefira a versão mais recente.
 Estrutura (sempre, nesta ordem, uma vacina por linha, com "•"):
 
 *No SUS (gratuito):*
-• Nome da vacina – dose
-• Nome da vacina – dose
+• Nome da vacina – dose – idade (ex.: 2 meses)
+• Nome da vacina – dose – idade
 Fonte: link do gov.br
 
 *Na rede particular:*
-• Nome da vacina – dose (o que a SBIm recomenda a mais ou diferente)
+• Nome da vacina – dose – idade (o que a SBIm recomenda a mais ou diferente)
 Fonte: link da SBIm
 
-Uma frase curta de explicação só depois das listas, se precisar. Se uma \
-das partes não tiver a informação nos sites, diga isso nela.
+Toda vacina leva a idade em que é aplicada, como está no calendário — \
+mesmo quando a pergunta já cita a idade. Uma frase curta de explicação só \
+depois das listas, se precisar. Se uma das partes não tiver a informação \
+nos sites, diga isso nela.
 
 Limites:
 - Se o contexto trouxer a idade do bebê, foque nessa idade.

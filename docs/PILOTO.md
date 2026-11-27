@@ -60,7 +60,7 @@ boas-vindas com um pedido de desculpas pela demora.
 | Variável | Valor atual | Para que serve |
 |---|---|---|
 | `MODO_ACESSO` | `convite` | `aberto` libera para todo mundo |
-| `CONVITES` | `PILOTO30:40` | Código e vagas. Mais vagas: `PILOTO30:60`. Mais de um: `PILOTO30:30,EQUIPE:5` |
+| `CONVITES` | `PILOTO30` | Código e vagas. Sem número = vagas ilimitadas; com teto: `PILOTO30:60`. Mais de um: `PILOTO30:30,EQUIPE:5` |
 | `LIMITE_DIARIO_POR_PESSOA` | `20` | `0` = sem limite |
 | `ORCAMENTO_MENSAL_USD` | `15` | Teto do mês com a OpenAI. `0` = sem teto |
 | `ALLOWED_SENDERS` | (vazio) | Números sempre liberados, sem convite (ex.: o seu) |

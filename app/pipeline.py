@@ -5,15 +5,16 @@ clínica antes do modelo (uma emergência nunca deve depender de a OpenAI estar
 no ar) e checagem de fundamentação depois.
 """
 
+import datetime as dt
 import time
 
-from app import caderneta, guardrails, planos
+from app import caderneta, familia, guardrails, planos
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.lembretes import LEMBRETES, VERSAO_LEMBRETES
 from app.llm import AssistantEngine, fallback_message
 from app.logging_utils import get_logger, pseudonymize
-from app.memoria_persistente import MemoriaPersistente
+from app.memoria_persistente import MEMORIA, MemoriaPersistente
 from app.memory import ConversationStore, KnownUsers, MessageDeduplicator, RateLimiter
 from app.piloto import (
     AUTORIZADO,
@@ -103,6 +104,10 @@ class MessagePipeline:
         # Situação do plano medida antes da pergunta, para o aviso de
         # "restam N" no fim da resposta.
         self._situacoes: dict = {}
+        # Modo família: titular confirmando o convite; convidado lendo o
+        # convite (número -> (código, quando)).
+        self._convites_familia_pendentes: set[str] = set()
+        self._entradas_pendentes: dict[str, tuple[str, float]] = {}
         # Quem recebeu a pergunta de lembretes e ainda não respondeu.
         self._lembretes_pendentes: set[str] = set()
         # Dado solto esperando "1": número -> (tipo, valor, bebê, quando).
@@ -169,6 +174,11 @@ class MessagePipeline:
 
         if not self.deduplicator.check_and_mark(message.message_id):
             return "duplicada"
+
+        # Antes do portão do piloto: o link da família também dá acesso.
+        entrada = self._entrada_na_familia(message)
+        if entrada:
+            return entrada
 
         portao = self._portao_do_convite(message)
         if portao:
@@ -375,6 +385,129 @@ class MessagePipeline:
             return "pergunta_de_lembretes"
         return None
 
+    # ------------------------------------------------------------------
+    # Modo família
+    # ------------------------------------------------------------------
+    def _entrada_na_familia(self, message: IncomingMessage) -> str | None:
+        """Convidado: lê o convite, entende o que vai compartilhar, aceita."""
+        if not self._memoria_ligada or message.kind != "text":
+            return None
+        sender, text = message.sender, (message.text or "").strip()
+
+        pendente = self._entradas_pendentes.get(sender)
+        if pendente and time.monotonic() - pendente[1] < CONFIRMACAO_VALE_S:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None:
+                self._entradas_pendentes.pop(sender, None)
+                if not resposta:
+                    self.channel.send_text(sender, familia.NAO_ENTROU)
+                    return "familia_recusada"
+                return self._entrar_na_familia(sender, pendente[0], message.message_id)
+
+        codigo = familia.encontrar_codigo(text)
+        if not codigo:
+            return None
+        situacao = self._na_memoria(
+            "situacao_do_convite", codigo, sender, familia.MAXIMO_MEMBROS, padrao="invalido"
+        )
+        if situacao != "valido":
+            self.channel.send_text(sender, familia.MOTIVOS[situacao])
+            return "familia_convite_invalido"
+        self._entradas_pendentes[sender] = (codigo, time.monotonic())
+        self.channel.send_text(sender, familia.EXPLICACAO_PARA_O_CONVIDADO)
+        return "familia_convite"
+
+    def _entrar_na_familia(self, sender: str, codigo: str, evidencia: str) -> str:
+        resultado = self._na_memoria(
+            "entrar_na_familia", sender, codigo, familia.MAXIMO_MEMBROS, padrao="invalido"
+        )
+        if resultado != "entrou":
+            self.channel.send_text(sender, familia.MOTIVOS.get(resultado, fallback_message()))
+            return "familia_convite_invalido"
+        # O "1" respondeu a um texto que diz o que é guardado, compartilhado e
+        # enviado: vale como consentimento para as três coisas, com a versão
+        # do texto registrada.
+        for finalidade in (MEMORIA, familia.FAMILIA, LEMBRETES):
+            self._na_memoria("decidir", sender, True, evidencia, finalidade, familia.VERSAO_MEMBRO)
+        self._na_memoria("salvar_telefone_para_lembretes", sender)
+        if self.piloto is not None:
+            self.piloto.autorizar_sem_convite(sender, "FAMILIA")
+        self._perguntados.discard(sender)
+        boas_vindas = ""
+        if self.known_users.is_first_contact(sender):
+            boas_vindas = guardrails.welcome_message() + "\n\n"
+        self.channel.send_text(
+            sender,
+            boas_vindas + familia.BEM_VINDA_A_FAMILIA + "\n\n"
+            + self.questionario.iniciar(sender, somente_relacao=True),
+        )
+        return "familia_entrou"
+
+    def _familia_do_titular(self, message: IncomingMessage, text: str) -> str | None:
+        if not self._memoria_ligada:
+            return None
+        sender = message.sender
+
+        if guardrails.is_leave_family_command(text):
+            saiu = self._na_memoria("sair_da_familia", sender, padrao=False)
+            self.channel.send_text(sender, familia.SAIU if saiu else familia.NAO_ESTA_EM_FAMILIA)
+            return "familia_saiu" if saiu else "familia_nenhuma"
+
+        final = guardrails.remove_member_final(text)
+        if final:
+            removido = self._na_memoria("remover_da_familia", sender, final, padrao=False)
+            self.channel.send_text(
+                sender, familia.REMOVIDO if removido else familia.NAO_ACHEI_PARA_REMOVER
+            )
+            return "familia_removeu" if removido else "familia_remocao_falhou"
+
+        if sender in self._convites_familia_pendentes:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None:
+                self._convites_familia_pendentes.discard(sender)
+                if not resposta:
+                    self.channel.send_text(sender, familia.CONVITE_CANCELADO)
+                    return "familia_convite_cancelado"
+                self._na_memoria(
+                    "decidir", sender, True, message.message_id, familia.FAMILIA,
+                    familia.VERSAO_TITULAR,
+                )
+                codigo = familia.novo_codigo()
+                if self._na_memoria(
+                    "criar_convite_familia", sender, codigo, dt.timedelta(days=7), padrao=False
+                ) is False:
+                    self.channel.send_text(sender, fallback_message())
+                    return "erro_memoria"
+                numero = "".join(c for c in self.settings.numero_whatsapp if c.isdigit())
+                self.channel.send_text(
+                    sender, familia.convite_gerado(familia.link_de_convite(numero, codigo))
+                )
+                return "familia_convite_gerado"
+
+        if not guardrails.is_family_command(text):
+            return None
+        info = self._na_memoria("familia", sender)
+        if info and not info["eh_titular"]:
+            self.channel.send_text(sender, familia.situacao_do_membro())
+            return "familia_membro"
+        if not self._na_memoria("decisao", sender):
+            self.channel.send_text(sender, familia.PRECISA_GUARDAR)
+            return "familia_sem_memoria"
+        assinatura = self._na_memoria("assinatura", sender)
+        hoje = self.questionario._hoje()
+        if not assinatura or assinatura["plano"] != planos.PLUS or assinatura["pago_ate"] < hoje:
+            self.channel.send_text(sender, familia.SO_NO_PLUS)
+            return "familia_so_no_plus"
+        membros = info["membros"] if info else []
+        vagas = familia.MAXIMO_MEMBROS - len(membros)
+        situacao = familia.situacao_da_familia(membros) + "\n\n" if membros else ""
+        if vagas <= 0:
+            self.channel.send_text(sender, situacao + familia.FAMILIA_CHEIA)
+            return "familia_cheia"
+        self._convites_familia_pendentes.add(sender)
+        self.channel.send_text(sender, situacao + familia.explicacao_para_o_titular(vagas))
+        return "familia_explicada"
+
     def _pergunta_de_lembretes(self, sender: str) -> str:
         """Depois do questionário com bebê: oferecer os lembretes, uma vez."""
         if not self._lembretes_ligados or sender in self._lembretes_pendentes:
@@ -451,6 +584,10 @@ class MessagePipeline:
         lembrete = self._lembretes_da_titular(message, text)
         if lembrete:
             return lembrete
+
+        comando_de_familia = self._familia_do_titular(message, text)
+        if comando_de_familia:
+            return comando_de_familia
 
         # "parar" no meio do questionário é parar o questionário, não sair do
         # serviço: precisa ser visto antes do SAIR/PARAR geral.
@@ -819,6 +956,8 @@ class MessagePipeline:
         self._cadernetas_pendentes.pop(sender, None)
         self._atualizacoes_pendentes.pop(sender, None)
         self._lembretes_pendentes.discard(sender)
+        self._convites_familia_pendentes.discard(sender)
+        self._entradas_pendentes.pop(sender, None)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""

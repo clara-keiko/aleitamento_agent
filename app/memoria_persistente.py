@@ -147,10 +147,35 @@ class MemoriaPersistente:
     def salvar_ano_nascimento_mae(self, numero: str, ano: int) -> None:
         self._atualizar_cuidador(numero, "ano_nascimento_mae = %s", (ano,))
 
+    def _familia(self, con, chave: str):
+        """(família, hash do titular) de quem é titular ou membro; ou None."""
+        linha = con.execute(
+            "SELECT id, titular_hash FROM familias WHERE titular_hash = %s", (chave,)
+        ).fetchone()
+        if linha:
+            return linha
+        return con.execute(
+            "SELECT f.id, f.titular_hash FROM membros_da_familia m"
+            " JOIN familias f ON f.id = m.familia_id WHERE m.telefone_hash = %s",
+            (chave,),
+        ).fetchone()
+
+    def _cuidador_dos_bebes(self, con, numero: str) -> str:
+        """Os bebês moram na conta do titular; o membro da família vê e
+        atualiza os dele. Fora de família, a própria conta."""
+        familia = self._familia(con, _chave(numero))
+        if familia and familia[1] != _chave(numero):
+            linha = con.execute(
+                "SELECT id FROM cuidadores WHERE telefone_hash = %s", (familia[1],)
+            ).fetchone()
+            if linha:
+                return linha[0]
+        return self._garantir_cuidador(con, numero)
+
     def salvar_bebe(self, numero: str, data_nascimento: dt.date) -> str:
         """O bebê com essa data de nascimento; cria se ainda não existe."""
         with self._conectar() as con, con.transaction():
-            cuidador = self._garantir_cuidador(con, numero)
+            cuidador = self._cuidador_dos_bebes(con, numero)
             # O bebê nasceu: a gestação registrada antes terminou.
             con.execute(
                 "UPDATE cuidadores SET gestante = false WHERE id = %s", (cuidador,)
@@ -209,10 +234,11 @@ class MemoriaPersistente:
             ).fetchone()
             if conta is None:
                 return None
+            dono = self._cuidador_dos_bebes(con, numero)
             bebes = con.execute(
                 "SELECT id, data_nascimento, sexo FROM bebes WHERE cuidador_id = %s"
                 " ORDER BY data_nascimento DESC",
-                (conta[0],),
+                (dono,),
             ).fetchall()
             vacinas = con.execute(
                 "SELECT r.bebe_id, r.valor_texto, r.referente_a FROM registros_do_bebe r"
@@ -220,13 +246,13 @@ class MemoriaPersistente:
                 " WHERE b.cuidador_id = %s AND r.tipo = 'vacina_tomada'"
                 " AND NOT EXISTS (SELECT 1 FROM registros_do_bebe c WHERE c.substitui_id = r.id)"
                 " ORDER BY r.referente_a",
-                (conta[0],),
+                (dono,),
             ).fetchall()
             situacao = con.execute(
                 "SELECT s.bebe_id, s.tipo, s.valor_numero, s.valor_texto, s.referente_a"
                 " FROM situacao_atual_do_bebe s JOIN bebes b ON b.id = s.bebe_id"
                 " WHERE b.cuidador_id = %s",
-                (conta[0],),
+                (dono,),
             ).fetchall()
         atuais: dict = {}
         por_bebe: dict = {}
@@ -266,34 +292,43 @@ class MemoriaPersistente:
             )
 
     def lembretes_do_dia(self, hoje: dt.date) -> list[dict]:
-        """Bebês com mesversário hoje, de quem pediu lembrete e ainda não
-        recebeu (nem foi conferido) o desta idade."""
+        """Um item por pessoa a avisar: bebês com mesversário hoje, ainda não
+        avisados nesta idade. Avisa o titular e os membros da família que
+        pediram lembrete (cada um tem o próprio consentimento e telefone)."""
         from app.lembretes import mesversario
 
         with self._conectar() as con:
-            linhas = con.execute(
-                "SELECT b.id, b.data_nascimento, b.sexo, c.telefone_cifrado"
+            bebes = con.execute(
+                "SELECT b.id, b.data_nascimento, b.sexo, c.telefone_hash"
                 " FROM bebes b JOIN cuidadores c ON c.id = b.cuidador_id"
-                " WHERE c.status = 'ativa' AND c.telefone_cifrado IS NOT NULL"
-                " AND c.relacao IN ('mae','pai','responsavel_legal')"
-                " AND (SELECT k.aceito AND k.revogado_em IS NULL FROM consentimentos k"
-                "      WHERE k.telefone_hash = c.telefone_hash AND k.finalidade = 'lembretes'"
-                "      ORDER BY k.decidido_em DESC, k.id DESC LIMIT 1)",
+                " WHERE c.status = 'ativa' AND c.relacao IN ('mae','pai','responsavel_legal')"
             ).fetchall()
             feitos = {
                 (str(b), m) for b, m in con.execute(
                     "SELECT bebe_id, idade_meses FROM lembretes"
                 ).fetchall()
             }
-        pendentes = []
-        for bebe_id, nascimento, sexo, telefone in linhas:
-            meses = mesversario(nascimento, hoje)
-            if meses is None or (str(bebe_id), meses) in feitos:
-                continue
-            pendentes.append({
-                "bebe_id": str(bebe_id), "idade_meses": meses, "sexo": sexo,
-                "telefone": self.cofre.decifrar(telefone),
-            })
+            pendentes = []
+            for bebe_id, nascimento, sexo, dono_hash in bebes:
+                meses = mesversario(nascimento, hoje)
+                if meses is None or (str(bebe_id), meses) in feitos:
+                    continue
+                destinos = con.execute(
+                    "SELECT c.telefone_cifrado FROM cuidadores c"
+                    " WHERE c.status = 'ativa' AND c.telefone_cifrado IS NOT NULL"
+                    " AND (c.telefone_hash = %s OR c.telefone_hash IN ("
+                    "      SELECT m.telefone_hash FROM membros_da_familia m"
+                    "      JOIN familias f ON f.id = m.familia_id WHERE f.titular_hash = %s))"
+                    " AND (SELECT k.aceito AND k.revogado_em IS NULL FROM consentimentos k"
+                    "      WHERE k.telefone_hash = c.telefone_hash AND k.finalidade = 'lembretes'"
+                    "      ORDER BY k.decidido_em DESC, k.id DESC LIMIT 1)",
+                    (dono_hash, dono_hash),
+                ).fetchall()
+                for (telefone,) in destinos:
+                    pendentes.append({
+                        "bebe_id": str(bebe_id), "idade_meses": meses, "sexo": sexo,
+                        "telefone": self.cofre.decifrar(telefone),
+                    })
         return pendentes
 
     def registrar_lembrete(self, bebe_id: str, idade_meses: int, status: str) -> None:
@@ -303,6 +338,109 @@ class MemoriaPersistente:
                 " ON CONFLICT (bebe_id, idade_meses) DO NOTHING",
                 (bebe_id, idade_meses, status),
             )
+
+    # ------------------------------------------------------------------
+    # Modo família (ver app/familia.py)
+    # ------------------------------------------------------------------
+    def familia(self, numero: str) -> dict | None:
+        chave = _chave(numero)
+        with self._conectar() as con:
+            familia = self._familia(con, chave)
+            if familia is None:
+                return None
+            membros = con.execute(
+                "SELECT telefone_hash, telefone_cifrado FROM membros_da_familia"
+                " WHERE familia_id = %s ORDER BY entrou_em",
+                (familia[0],),
+            ).fetchall()
+        return {
+            "id": str(familia[0]),
+            "eh_titular": familia[1] == chave,
+            "membros": [
+                {"hash": h, "final": self.cofre.decifrar(t)[-4:]} for h, t in membros
+            ],
+        }
+
+    def criar_convite_familia(self, numero: str, codigo: str, validade: dt.timedelta) -> None:
+        """Cria a família do titular, se ainda não existe, e um convite."""
+        agora = self._agora()
+        with self._conectar() as con, con.transaction():
+            familia = con.execute(
+                "INSERT INTO familias (titular_hash) VALUES (%s)"
+                " ON CONFLICT (titular_hash) DO UPDATE SET titular_hash = excluded.titular_hash"
+                " RETURNING id",
+                (_chave(numero),),
+            ).fetchone()[0]
+            con.execute(
+                "INSERT INTO convites_de_familia (codigo, familia_id, criado_em, expira_em)"
+                " VALUES (%s, %s, %s, %s)",
+                (codigo, familia, agora, agora + validade),
+            )
+
+    def situacao_do_convite(self, codigo: str, numero: str, maximo_membros: int) -> str:
+        """valido, invalido, expirado, usado, cheia, proprio ou ja_em_familia."""
+        chave = _chave(numero)
+        with self._conectar() as con:
+            convite = con.execute(
+                "SELECT c.familia_id, c.expira_em, c.usado_em, f.titular_hash"
+                " FROM convites_de_familia c JOIN familias f ON f.id = c.familia_id"
+                " WHERE c.codigo = %s",
+                (codigo,),
+            ).fetchone()
+            if convite is None:
+                return "invalido"
+            familia_id, expira_em, usado_em, titular = convite
+            if titular == chave:
+                return "proprio"
+            if self._familia(con, chave) is not None:
+                return "ja_em_familia"
+            if usado_em is not None:
+                return "usado"
+            if expira_em < self._agora():
+                return "expirado"
+            membros = con.execute(
+                "SELECT count(*) FROM membros_da_familia WHERE familia_id = %s", (familia_id,)
+            ).fetchone()[0]
+        return "cheia" if membros >= maximo_membros else "valido"
+
+    def entrar_na_familia(self, numero: str, codigo: str, maximo_membros: int) -> str:
+        """Usa o convite. Devolve "entrou" ou o motivo de não ter entrado."""
+        situacao = self.situacao_do_convite(codigo, numero, maximo_membros)
+        if situacao != "valido":
+            return situacao
+        with self._conectar() as con, con.transaction():
+            familia_id = con.execute(
+                "UPDATE convites_de_familia SET usado_em = %s"
+                " WHERE codigo = %s AND usado_em IS NULL RETURNING familia_id",
+                (self._agora(), codigo),
+            ).fetchone()
+            if familia_id is None:
+                return "usado"
+            con.execute(
+                "INSERT INTO membros_da_familia (telefone_hash, familia_id, telefone_cifrado)"
+                " VALUES (%s, %s, %s)",
+                (_chave(numero), familia_id[0], self.cofre.cifrar(numero)),
+            )
+            self._garantir_cuidador(con, numero)
+        return "entrou"
+
+    def sair_da_familia(self, numero: str) -> bool:
+        with self._conectar() as con:
+            return con.execute(
+                "DELETE FROM membros_da_familia WHERE telefone_hash = %s", (_chave(numero),)
+            ).rowcount > 0
+
+    def remover_da_familia(self, titular: str, final: str) -> bool:
+        """O titular remove o membro cujo número termina em `final`."""
+        info = self.familia(titular)
+        if not info or not info["eh_titular"]:
+            return False
+        alvo = [m["hash"] for m in info["membros"] if m["final"] == final]
+        if len(alvo) != 1:
+            return False
+        with self._conectar() as con:
+            con.execute("DELETE FROM membros_da_familia WHERE telefone_hash = %s", (alvo[0],))
+        return True
 
     # ------------------------------------------------------------------
     # Custo de uso (calibrar os limites por plano)
@@ -319,22 +457,45 @@ class MemoriaPersistente:
                  tokens_entrada, tokens_saida, buscas_web, self._agora()),
             )
 
+    def _hashes_do_plano(self, con, numero: str) -> list[str]:
+        """Quem divide as perguntas: a família inteira, se o titular tem o
+        Plus em dia; senão, só a própria pessoa."""
+        chave = _chave(numero)
+        familia = self._familia(con, chave)
+        if familia is None:
+            return [chave]
+        hoje = self._agora().date()
+        ativa = con.execute(
+            "SELECT 1 FROM assinaturas WHERE telefone_hash = %s AND pago_ate >= %s",
+            (familia[1], hoje),
+        ).fetchone()
+        if not ativa:
+            return [chave]
+        membros = [h for (h,) in con.execute(
+            "SELECT telefone_hash FROM membros_da_familia WHERE familia_id = %s", (familia[0],)
+        ).fetchall()]
+        return [familia[1], *membros]
+
     def usos_entre(self, numero: str, inicio: dt.datetime, fim: dt.datetime) -> int:
         with self._conectar() as con:
             return con.execute(
                 "SELECT count(*) FROM uso_do_modelo"
-                " WHERE telefone_hash = %s AND criado_em >= %s AND criado_em < %s",
-                (_chave(numero), inicio, fim),
+                " WHERE telefone_hash = ANY(%s) AND criado_em >= %s AND criado_em < %s",
+                (self._hashes_do_plano(con, numero), inicio, fim),
             ).fetchone()[0]
 
     # ------------------------------------------------------------------
     # Assinaturas
     # ------------------------------------------------------------------
     def assinatura(self, numero: str) -> dict | None:
+        """A assinatura que vale para a pessoa: a dela ou, se é membro de uma
+        família, a do titular."""
         with self._conectar() as con:
+            familia = self._familia(con, _chave(numero))
+            dono = familia[1] if familia else _chave(numero)
             linha = con.execute(
                 "SELECT plano, inicio, pago_ate, origem FROM assinaturas WHERE telefone_hash = %s",
-                (_chave(numero),),
+                (dono,),
             ).fetchone()
         if linha is None:
             return None
@@ -446,6 +607,9 @@ class MemoriaPersistente:
         with self._conectar() as con, con.transaction():
             con.execute("DELETE FROM cuidadores WHERE telefone_hash = %s", (chave,))
             con.execute("DELETE FROM uso_do_modelo WHERE telefone_hash = %s", (chave,))
+            # Titular apagando desfaz a família; membro apagando sai dela.
+            con.execute("DELETE FROM familias WHERE titular_hash = %s", (chave,))
+            con.execute("DELETE FROM membros_da_familia WHERE telefone_hash = %s", (chave,))
             con.execute(
                 "UPDATE consentimentos SET revogado_em = %s"
                 " WHERE telefone_hash = %s AND aceito AND revogado_em IS NULL",

@@ -490,6 +490,24 @@ def is_plan_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in PLAN_KEYWORDS
 
 
+FAMILY_KEYWORDS = {"familia", "modo familia", "minha familia"}
+LEAVE_FAMILY_KEYWORDS = {"sair da familia"}
+
+
+def is_family_command(text: str) -> bool:
+    return normalize(text).strip(" .!?") in FAMILY_KEYWORDS
+
+
+def is_leave_family_command(text: str) -> bool:
+    return normalize(text).strip(" .!") in LEAVE_FAMILY_KEYWORDS
+
+
+def remove_member_final(text: str) -> str | None:
+    """"REMOVER 1234" -> "1234"."""
+    achado = re.fullmatch(r"remover\s+(\d{4})", normalize(text).strip(" .!"))
+    return achado[1] if achado else None
+
+
 def is_my_data_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
 

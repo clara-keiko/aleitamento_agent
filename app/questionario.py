@@ -77,6 +77,9 @@ FIM_SEM_RELACAO = (
 @dataclass
 class _Estado:
     passo: str
+    # Quem entrou pela família: o bebê já está no perfil; só falta saber
+    # quem é a pessoa.
+    somente_relacao: bool = False
     relacao: str | None = None
     bebe_id: str | None = None
     anotado: list[str] = field(default_factory=list)
@@ -151,8 +154,10 @@ class Questionario:
     def encerrar(self, numero: str) -> None:
         self._estados.pop(numero, None)
 
-    def iniciar(self, numero: str) -> str:
-        self._estados[numero] = _Estado("relacao")
+    def iniciar(self, numero: str, somente_relacao: bool = False) -> str:
+        self._estados[numero] = _Estado("relacao", somente_relacao=somente_relacao)
+        if somente_relacao:
+            return "Para eu te conhecer: *você é:*\n1 – Mãe\n2 – Pai\n3 – Responsável legal\n4 – Outra pessoa"
         return TEXTO["relacao"]
 
     def _pergunta(self, estado: _Estado) -> str:
@@ -183,6 +188,9 @@ class Questionario:
             if len(limpo) > 25 or "?" in texto:
                 return None
             return "Não entendi 🙈 " + self._pergunta(estado)
+        if proximo == "fim_relacao":
+            self.encerrar(numero)
+            return "Anotado! 💛 Agora, qual é a sua dúvida?"
         if proximo in ("outro", "sem_relacao"):
             self.encerrar(numero)
             return FIM_OUTRO if proximo == "outro" else FIM_SEM_RELACAO
@@ -197,6 +205,15 @@ class Questionario:
         hoje = self._hoje()
         passo = estado.passo
         m = self.memoria
+
+        if passo == "relacao" and estado.somente_relacao:
+            if pular:
+                return "fim_relacao"
+            relacao = RELACOES.get(limpo)
+            if not relacao:
+                return None
+            m.salvar_relacao(numero, relacao)
+            return "fim_relacao"
 
         if passo == "relacao":
             if pular:

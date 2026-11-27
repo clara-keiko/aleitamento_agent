@@ -186,6 +186,16 @@ class RegistroDoPiloto:
             ).fetchone()
         return linha is not None
 
+    def autorizar_sem_convite(self, numero: str, origem: str) -> None:
+        """Libera sem gastar vaga de convite (ex.: entrou pela família)."""
+        chave = hash_estavel(numero_canonico(numero))
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO testadores (numero_hash, codigo, autorizado_em) VALUES (?, ?, ?)"
+                " ON CONFLICT(numero_hash) DO NOTHING",
+                (chave, origem, self._agora().isoformat(timespec="seconds")),
+            )
+
     def usar_convite(self, numero: str, codigo: str) -> str:
         chave = hash_estavel(numero_canonico(numero))
         agora = self._agora().isoformat(timespec="seconds")

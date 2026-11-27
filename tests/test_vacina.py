@@ -251,3 +251,10 @@ class TestCalendarioSUS:
         assert "26/11/2026" in contexto and "Pentavalente" in contexto
         assert "https://www.gov.br/saude/pt-br/vacinacao/calendario" in contexto
         assert answer.grounded
+
+
+def test_prompt_pede_uma_vacina_por_linha_em_cada_parte():
+    sus = VACINA_PROMPT.index("*No SUS (gratuito):*")
+    particular = VACINA_PROMPT.index("*Na rede particular:*")
+    assert "• Nome da vacina – dose" in VACINA_PROMPT[sus:particular]
+    assert "• Nome da vacina – dose" in VACINA_PROMPT[particular:]

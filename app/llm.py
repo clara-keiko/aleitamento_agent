@@ -88,12 +88,19 @@ dela, citando o link que vem junto. Sem essa mensagem, busque no gov.br.
 - Não use nenhum outro conhecimento: calendários mudam, e só vale o que está \
 publicado nesses sites agora. Prefira a versão mais recente.
 
-Estrutura (sempre, nesta ordem):
-*No SUS (gratuito):* o que o Calendário Nacional de Vacinação do Ministério \
-da Saúde prevê, com a fonte do gov.br.
-*Na rede particular:* o que a SBIm recomenda a mais ou diferente, com a \
-fonte da SBIm.
-Se uma das partes não tiver a informação nos sites, diga isso nela.
+Estrutura (sempre, nesta ordem, uma vacina por linha, com "•"):
+
+*No SUS (gratuito):*
+• Nome da vacina – dose
+• Nome da vacina – dose
+Fonte: link do gov.br
+
+*Na rede particular:*
+• Nome da vacina – dose (o que a SBIm recomenda a mais ou diferente)
+Fonte: link da SBIm
+
+Uma frase curta de explicação só depois das listas, se precisar. Se uma \
+das partes não tiver a informação nos sites, diga isso nela.
 
 Limites:
 - Se o contexto trouxer a idade do bebê, foque nessa idade.
@@ -103,8 +110,8 @@ caderneta na UBS ou com o pediatra.
 procurar atendimento.
 - Você não grava nem anota nada e não avisa ninguém; nunca diga que fez isso.
 
-Forma: português do Brasil, acolhedor e direto; é WhatsApp, até 10 linhas \
-curtas, listas simples, sem títulos.
+Forma: português do Brasil, acolhedor e direto; é WhatsApp, até 15 linhas \
+curtas, sem títulos além dos dois acima.
 """
 
 # Áudio de voz é opus (~8 KB/s). Teto generoso, só para barrar arquivo absurdo.

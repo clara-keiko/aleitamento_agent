@@ -261,7 +261,7 @@ class MessagePipeline:
             answer = self.engine.answer_vacina(text, history=history)
         else:
             answer = self.engine.answer(text, history=history)
-        self._registrar_uso(message.sender, answer)
+        self._registrar_uso(message.sender, answer, "vacina" if sobre_vacina else "pergunta")
 
         if answer.error:
             self.channel.send_text(message.sender, fallback_message())
@@ -580,13 +580,11 @@ class MessagePipeline:
             return "limite_diario"
         return None
 
-    def _registrar_uso(self, sender: str, answer) -> None:
+    def _registrar_uso(self, sender: str, answer, tipo: str = "pergunta") -> None:
         """Toda chamada ao modelo conta, inclusive a que não foi entregue.
 
         Resposta recusada por falta de fundamentação também gastou token.
         """
-        if self.piloto is None:
-            return
         custo = custo_da_resposta(
             answer.input_tokens,
             answer.output_tokens,
@@ -599,7 +597,15 @@ class MessagePipeline:
         # Sem token, a chamada falhou antes de buscar na base.
         elif answer.input_tokens:
             custo += self.settings.custo_busca_usd
-        self.piloto.registrar_pergunta(None if self.channel.name == "web" else sender, custo)
+        numero = None if self.channel.name == "web" else sender
+        if self.piloto is not None:
+            self.piloto.registrar_pergunta(numero, custo)
+        if self.memoria is not None:
+            # Custo real por chamada, para calibrar os limites por plano.
+            self._na_memoria(
+                "registrar_uso", numero, tipo, custo,
+                answer.input_tokens, answer.output_tokens, buscas_web,
+            )
 
     def _na_memoria_questionario(self, sender: str, text: str) -> str | None:
         """Resposta ao questionário; banco fora encerra sem travar a conversa."""
@@ -684,7 +690,7 @@ class MessagePipeline:
         # A foto só existe nesta função: é lida e descartada aqui.
         leitura = self.engine.ler_caderneta(imagem, message.media_mime)
         del imagem
-        self._registrar_uso(sender, leitura)
+        self._registrar_uso(sender, leitura, "foto_caderneta")
         if leitura.erro:
             self.channel.send_text(sender, fallback_message())
             return "erro_modelo"

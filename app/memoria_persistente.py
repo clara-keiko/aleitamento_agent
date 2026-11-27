@@ -251,6 +251,56 @@ class MemoriaPersistente:
         }
 
     # ------------------------------------------------------------------
+    # Custo de uso (calibrar os limites por plano)
+    # ------------------------------------------------------------------
+    def registrar_uso(
+        self, numero: str | None, tipo: str, custo_usd: float,
+        tokens_entrada: int = 0, tokens_saida: int = 0, buscas_web: int = 0,
+    ) -> None:
+        with self._conectar() as con:
+            con.execute(
+                "INSERT INTO uso_do_modelo (telefone_hash, tipo, custo_usd, tokens_entrada,"
+                " tokens_saida, buscas_web, criado_em) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (_chave(numero) if numero else None, tipo, custo_usd,
+                 tokens_entrada, tokens_saida, buscas_web, self._agora()),
+            )
+
+    def resumo_de_uso(self, dias: int = 30) -> dict:
+        """Custo real nos últimos `dias`: por tipo e por pessoa."""
+        desde = self._agora() - dt.timedelta(days=dias)
+        with self._conectar() as con:
+            por_tipo = con.execute(
+                "SELECT tipo, count(*), coalesce(sum(custo_usd), 0), coalesce(avg(custo_usd), 0)"
+                " FROM uso_do_modelo WHERE criado_em >= %s GROUP BY tipo ORDER BY tipo",
+                (desde,),
+            ).fetchall()
+            pessoas = con.execute(
+                "SELECT count(*), coalesce(avg(n), 0), coalesce(max(n), 0),"
+                " coalesce(avg(custo), 0), coalesce(max(custo), 0)"
+                " FROM (SELECT telefone_hash, count(*) AS n, sum(custo_usd) AS custo"
+                "       FROM uso_do_modelo WHERE criado_em >= %s AND telefone_hash IS NOT NULL"
+                "       GROUP BY telefone_hash) p",
+                (desde,),
+            ).fetchone()
+        chamadas = sum(linha[1] for linha in por_tipo)
+        total = sum(float(linha[2]) for linha in por_tipo)
+        return {
+            "dias": dias,
+            "chamadas": chamadas,
+            "custo_total_usd": total,
+            "custo_medio_usd": total / chamadas if chamadas else 0.0,
+            "por_tipo": [
+                {"tipo": t, "chamadas": n, "custo_usd": float(s), "medio_usd": float(m)}
+                for t, n, s, m in por_tipo
+            ],
+            "pessoas": pessoas[0],
+            "perguntas_por_pessoa": float(pessoas[1]),
+            "max_perguntas_pessoa": pessoas[2],
+            "custo_por_pessoa_usd": float(pessoas[3]),
+            "max_custo_pessoa_usd": float(pessoas[4]),
+        }
+
+    # ------------------------------------------------------------------
     # Direitos da titular
     # ------------------------------------------------------------------
     def tem_dados(self, numero: str) -> bool:
@@ -297,6 +347,7 @@ class MemoriaPersistente:
         agora = self._agora()
         with self._conectar() as con, con.transaction():
             con.execute("DELETE FROM cuidadores WHERE telefone_hash = %s", (chave,))
+            con.execute("DELETE FROM uso_do_modelo WHERE telefone_hash = %s", (chave,))
             con.execute(
                 "UPDATE consentimentos SET revogado_em = %s"
                 " WHERE telefone_hash = %s AND aceito AND revogado_em IS NULL",
@@ -319,6 +370,10 @@ class MemoriaPersistente:
                 " WHERE status = 'ativa' AND ultima_mensagem_em < %s - make_interval(months => %s)",
                 (agora, agora, meses_sem_uso),
             ).rowcount
+            # Custo de uso só serve para calibrar planos: 13 meses bastam.
+            con.execute(
+                "DELETE FROM uso_do_modelo WHERE criado_em < %s - interval '13 months'", (agora,)
+            )
             apagadas = con.execute(
                 "DELETE FROM cuidadores"
                 " WHERE status = 'inativa' AND inativa_desde < %s - make_interval(months => %s)",

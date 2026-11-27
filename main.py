@@ -374,7 +374,42 @@ def painel_do_piloto(request: Request) -> Response:
 </div>
 <p class="sub">Limite por pessoa: {limite or "sem limite"} perguntas por dia.</p>
 <table><tr><th>Convite</th><th>Vagas</th><th>Link para enviar</th></tr>{linhas_convite}</table>
+{_bloco_de_custo()}
 {_formulario_liberar(r["convites"])}""")
+
+
+_NOMES_DE_USO = {"pergunta": "Pergunta", "vacina": "Vacina (busca SUS/SBIm)",
+                 "foto_caderneta": "Foto da caderneta"}
+
+
+def _bloco_de_custo() -> str:
+    """Custo real dos últimos 30 dias, para decidir os limites por plano."""
+    if memoria is None:
+        return ""
+    u = None
+    try:
+        u = memoria.resumo_de_uso(30)
+    except Exception as exc:  # noqa: BLE001 - banco fora não derruba o painel
+        log.error("painel: resumo de uso indisponível: %s", exc)
+    if not u or not u["chamadas"]:
+        return "<h2>Custo real por pergunta</h2><p class=\"sub\">Ainda sem dados.</p>"
+    linhas = "".join(
+        f"<tr><td>{html.escape(_NOMES_DE_USO.get(t['tipo'], t['tipo']))}</td>"
+        f"<td>{t['chamadas']}</td><td>US$ {t['medio_usd']:.4f}</td>"
+        f"<td>US$ {t['custo_usd']:.2f}</td></tr>"
+        for t in u["por_tipo"]
+    )
+    medio = u["custo_medio_usd"]
+    return f"""
+<h2>Custo real por pergunta (últimos 30 dias)</h2>
+<table><tr><th>Tipo</th><th>Chamadas</th><th>Custo médio</th><th>Total</th></tr>{linhas}</table>
+<div class="grade" style="margin-top:1rem">
+  <div class="num"><b>US$ {medio:.4f}</b><span>custo médio por pergunta</span></div>
+  <div class="num"><b>{u["perguntas_por_pessoa"]:.0f}</b><span>perguntas por pessoa (média; máx. {u["max_perguntas_pessoa"]})</span></div>
+  <div class="num"><b>US$ {u["custo_por_pessoa_usd"]:.2f}</b><span>custo por pessoa (máx. US$ {u["max_custo_pessoa_usd"]:.2f})</span></div>
+</div>
+<p class="sub">No custo médio atual: 30 perguntas/mês = US$ {30 * medio:.2f};
+150 perguntas/mês = US$ {150 * medio:.2f} por pessoa.</p>"""
 
 
 def _bloco_link(link: str) -> str:

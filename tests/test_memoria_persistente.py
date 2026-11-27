@@ -356,3 +356,55 @@ class TestBoasVindasDepoisDeReiniciar:
         pipeline = MessagePipeline(settings, channel, FakeEngine(), piloto=piloto)
         pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
         assert "assistente educativo" not in channel.bodies
+
+
+class TestCustoDeUso:
+    def test_registra_e_resume(self, memoria):
+        memoria.registrar_uso(NUMERO, "pergunta", 0.004, 3000, 400)
+        memoria.registrar_uso(NUMERO, "pergunta", 0.006, 4000, 500)
+        memoria.registrar_uso(NUMERO, "vacina", 0.02, 5000, 600, 1)
+        memoria.registrar_uso("5521900000002", "pergunta", 0.005)
+        memoria.registrar_uso(None, "pergunta", 0.003)  # protótipo web
+        u = memoria.resumo_de_uso(30)
+        assert u["chamadas"] == 5
+        assert u["custo_total_usd"] == pytest.approx(0.038)
+        vacina = next(t for t in u["por_tipo"] if t["tipo"] == "vacina")
+        assert vacina["medio_usd"] == pytest.approx(0.02)
+        assert u["pessoas"] == 2
+        assert u["max_perguntas_pessoa"] == 3
+        assert u["max_custo_pessoa_usd"] == pytest.approx(0.03)
+
+    def test_fora_da_janela_nao_conta(self, memoria, relogio):
+        memoria.registrar_uso(NUMERO, "pergunta", 0.01)
+        relogio.t += dt.timedelta(days=31)
+        assert memoria.resumo_de_uso(30)["chamadas"] == 0
+
+    def test_nao_guarda_telefone(self, memoria, banco):
+        memoria.registrar_uso(NUMERO, "pergunta", 0.01)
+        with psycopg.connect(banco) as con:
+            assert "81814170" not in str(con.execute("SELECT * FROM uso_do_modelo").fetchall())
+
+    def test_apagar_leva_o_uso(self, memoria):
+        memoria.decidir(NUMERO, True, "w0")
+        memoria.registrar_uso(NUMERO, "pergunta", 0.01)
+        memoria.apagar_tudo(NUMERO)
+        assert memoria.resumo_de_uso(30)["chamadas"] == 0
+
+    def test_pipeline_registra_o_tipo(self, memoria):
+        from app.llm import Answer
+
+        pipeline, _, engine = montar(memoria, ativa=False)
+        engine.answer_value = Answer(text="ok", grounded=True, input_tokens=1000, output_tokens=100)
+        pipeline.handle(text_message("como melhorar a pega?", "m1", NUMERO))
+        pipeline.handle(text_message("quais vacinas aos 2 meses?", "m2", NUMERO))
+        tipos = {t["tipo"]: t["chamadas"] for t in memoria.resumo_de_uso(30)["por_tipo"]}
+        assert tipos == {"pergunta": 1, "vacina": 1}
+
+    def test_painel_mostra_o_custo(self, memoria, monkeypatch):
+        import main
+
+        memoria.registrar_uso(NUMERO, "pergunta", 0.008)
+        monkeypatch.setattr(main, "memoria", memoria)
+        bloco = main._bloco_de_custo()
+        assert "US$ 0.0080" in bloco
+        assert "150 perguntas/mês = US$ 1.20" in bloco

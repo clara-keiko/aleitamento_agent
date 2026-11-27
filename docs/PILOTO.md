@@ -114,3 +114,25 @@ seguro para crescer é o número oficial (API da Meta).
   chave; trocar a chave tira o acesso de todas as testadoras.
 - Se o disco falhar, o agente segue com convites e limites em memória (o log
   avisa), que zeram a cada reinício. Os limites continuam valendo.
+
+## Cobrança (Asaas)
+
+O LactAI Plus é cobrado pelo Asaas, em nome da Watanabe AI Tech
+(`app/pagamentos.py`).
+
+- **ASSINAR** cria, uma vez por pessoa, um link de pagamento recorrente mensal
+  (R$ 29,90, Pix, cartão ou boleto) e o manda no WhatsApp. Nome e CPF são
+  preenchidos na página do Asaas; o LactAI não os vê.
+- Cada pagamento confirmado (`PAYMENT_CONFIRMED` ou `PAYMENT_RECEIVED`) chega
+  em `POST /pagamentos/asaas` e estende o Plus até um mês depois do vencimento,
+  mais 3 dias de tolerância. Cada pagamento conta uma vez só, mesmo que o aviso
+  chegue repetido. Só a primeira ativação manda mensagem.
+- Quem não paga perde o Plus quando a validade vence e volta ao gratuito, sem
+  perder o histórico. Um estorno encerra o Plus no mesmo dia.
+- **CANCELAR ASSINATURA** cancela a renovação no Asaas; o que já foi pago
+  continua valendo. **APAGAR** também cancela a renovação.
+- Na subida, o serviço cadastra o aviso de pagamentos no Asaas sozinho, com a
+  senha `ASAAS_WEBHOOK_TOKEN`, que o Render gera.
+- Para ir à conta real: troque `ASAAS_API_KEY` pela chave de produção e
+  `ASAAS_AMBIENTE` para `producao`. Os links do sandbox deixam de valer; cada
+  pessoa recebe um novo ao mandar ASSINAR.

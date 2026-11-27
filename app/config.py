@@ -203,6 +203,15 @@ class Settings:
     preco_assinatura: str = field(default_factory=lambda: _env("PRECO_ASSINATURA", "R$ 29,90"))
     # Link de pagamento (Mercado Pago etc.). Vazio: a mensagem indica o e-mail.
     link_assinatura: str = field(default_factory=lambda: _env("LINK_ASSINATURA"))
+    valor_assinatura: float = field(default_factory=lambda: _env_float("VALOR_ASSINATURA", 29.90))
+    # Cobrança pelo Asaas (ver app/pagamentos.py). Sem a chave, ASSINAR não
+    # aparece e as mensagens de limite indicam o link ou o e-mail acima.
+    asaas_api_key: str = field(default_factory=lambda: _env("ASAAS_API_KEY"))
+    asaas_ambiente: str = field(default_factory=lambda: _env("ASAAS_AMBIENTE", "sandbox"))
+    # Senha que o Asaas manda em cada aviso de pagamento (asaas-access-token).
+    asaas_webhook_token: str = field(default_factory=lambda: _env("ASAAS_WEBHOOK_TOKEN"))
+    # Endereço público do serviço; o Render preenche sozinho.
+    url_publica: str = field(default_factory=lambda: _env("RENDER_EXTERNAL_URL"))
     # Lembrete de vacina no mesversário. Só liga depois de o modelo de
     # mensagem ser aprovado pela Meta (ver docs/LEMBRETES.md).
     lembretes_ativos: bool = field(default_factory=lambda: _env_bool("LEMBRETES_ATIVOS", False))

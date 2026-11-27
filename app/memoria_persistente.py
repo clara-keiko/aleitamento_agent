@@ -518,6 +518,129 @@ class MemoriaPersistente:
         with self._conectar() as con:
             con.execute("DELETE FROM assinaturas WHERE telefone_hash = %s", (_chave(numero),))
 
+    # ------------------------------------------------------------------
+    # Cobrança (Asaas)
+    # ------------------------------------------------------------------
+    def link_de_pagamento(self, numero: str) -> str | None:
+        with self._conectar() as con:
+            linha = con.execute(
+                "SELECT url FROM links_de_pagamento WHERE telefone_hash = %s"
+                " ORDER BY criado_em DESC LIMIT 1",
+                (_chave(numero),),
+            ).fetchone()
+        return linha[0] if linha else None
+
+    def guardar_link_de_pagamento(self, numero: str, link_id: str, url: str) -> None:
+        with self._conectar() as con:
+            con.execute(
+                "INSERT INTO links_de_pagamento (link_id, telefone_hash, telefone_cifrado, url)"
+                " VALUES (%s, %s, %s, %s) ON CONFLICT (link_id) DO NOTHING",
+                (link_id, _chave(numero), self.cofre.cifrar(numero), url),
+            )
+
+    def assinatura_asaas(self, numero: str) -> str | None:
+        """Id da assinatura recorrente da própria pessoa no Asaas."""
+        with self._conectar() as con:
+            linha = con.execute(
+                "SELECT assinatura_asaas FROM links_de_pagamento"
+                " WHERE telefone_hash = %s AND assinatura_asaas IS NOT NULL"
+                " ORDER BY criado_em DESC LIMIT 1",
+                (_chave(numero),),
+            ).fetchone()
+        return linha[0] if linha else None
+
+    def esquecer_assinatura_asaas(self, assinatura_id: str) -> None:
+        with self._conectar() as con:
+            con.execute(
+                "UPDATE links_de_pagamento SET assinatura_asaas = NULL"
+                " WHERE assinatura_asaas = %s",
+                (assinatura_id,),
+            )
+
+    def _dono_do_pagamento(self, con, link_id: str | None, assinatura_id: str | None):
+        if link_id:
+            linha = con.execute(
+                "SELECT link_id, telefone_hash, telefone_cifrado FROM links_de_pagamento"
+                " WHERE link_id = %s", (link_id,),
+            ).fetchone()
+            if linha:
+                return linha
+        if assinatura_id:
+            return con.execute(
+                "SELECT link_id, telefone_hash, telefone_cifrado FROM links_de_pagamento"
+                " WHERE assinatura_asaas = %s", (assinatura_id,),
+            ).fetchone()
+        return None
+
+    def aplicar_pagamento(
+        self, pagamento_id: str, evento: str, link_id: str | None,
+        assinatura_id: str | None, pago_ate: dt.date, hoje: dt.date,
+    ) -> dict:
+        """Um pagamento confirmado estende o LactAI Plus, uma vez só.
+
+        Tudo numa transação: se algo falhar, o Asaas reenvia e nada fica
+        marcado como feito sem ter sido feito. Status: "novo", "repetido" ou
+        "desconhecido" (link que não é de ninguém aqui).
+        """
+        with self._conectar() as con, con.transaction():
+            dono = self._dono_do_pagamento(con, link_id, assinatura_id)
+            if dono is None:
+                return {"status": "desconhecido"}
+            novo = con.execute(
+                "INSERT INTO pagamentos_processados (pagamento_id, evento) VALUES (%s, %s)"
+                " ON CONFLICT (pagamento_id) DO NOTHING RETURNING pagamento_id",
+                (pagamento_id, evento),
+            ).fetchone()
+            if novo is None:
+                return {"status": "repetido"}
+            link, chave, telefone = dono
+            if assinatura_id:
+                con.execute(
+                    "UPDATE links_de_pagamento SET assinatura_asaas = %s WHERE link_id = %s",
+                    (assinatura_id, link),
+                )
+            atual = con.execute(
+                "SELECT inicio, pago_ate FROM assinaturas WHERE telefone_hash = %s", (chave,),
+            ).fetchone()
+            vigente = atual is not None and atual[1] >= hoje
+            inicio = atual[0] if vigente else hoje
+            ate = max(pago_ate, atual[1]) if vigente else pago_ate
+            con.execute(
+                "INSERT INTO assinaturas (telefone_hash, plano, inicio, pago_ate, origem)"
+                " VALUES (%s, 'plus', %s, %s, 'asaas')"
+                " ON CONFLICT (telefone_hash) DO UPDATE SET plano = 'plus', inicio = excluded.inicio,"
+                "  pago_ate = excluded.pago_ate, origem = 'asaas', atualizado_em = now()",
+                (chave, inicio, ate),
+            )
+        return {
+            "status": "novo",
+            "numero": self.cofre.decifrar(telefone),
+            "pago_ate": ate,
+            "primeiro": not vigente,
+        }
+
+    def estornar_pagamento(
+        self, pagamento_id: str, link_id: str | None, assinatura_id: str | None, hoje: dt.date,
+    ) -> str:
+        """Estorno encerra o Plus hoje. Status como em aplicar_pagamento."""
+        with self._conectar() as con, con.transaction():
+            dono = self._dono_do_pagamento(con, link_id, assinatura_id)
+            if dono is None:
+                return "desconhecido"
+            novo = con.execute(
+                "INSERT INTO pagamentos_processados (pagamento_id, evento) VALUES (%s, 'PAYMENT_REFUNDED')"
+                " ON CONFLICT (pagamento_id) DO NOTHING RETURNING pagamento_id",
+                (f"{pagamento_id}:estorno",),
+            ).fetchone()
+            if novo is None:
+                return "repetido"
+            con.execute(
+                "UPDATE assinaturas SET pago_ate = %s, atualizado_em = now()"
+                " WHERE telefone_hash = %s AND pago_ate >= %s",
+                (hoje - dt.timedelta(days=1), dono[1], hoje),
+            )
+        return "novo"
+
     def contar_assinaturas_ativas(self, hoje: dt.date) -> int:
         with self._conectar() as con:
             return con.execute(
@@ -607,6 +730,8 @@ class MemoriaPersistente:
         with self._conectar() as con, con.transaction():
             con.execute("DELETE FROM cuidadores WHERE telefone_hash = %s", (chave,))
             con.execute("DELETE FROM uso_do_modelo WHERE telefone_hash = %s", (chave,))
+            # O telefone cifrado do link de pagamento também é dado pessoal.
+            con.execute("DELETE FROM links_de_pagamento WHERE telefone_hash = %s", (chave,))
             # Titular apagando desfaz a família; membro apagando sai dela.
             con.execute("DELETE FROM familias WHERE titular_hash = %s", (chave,))
             con.execute("DELETE FROM membros_da_familia WHERE telefone_hash = %s", (chave,))

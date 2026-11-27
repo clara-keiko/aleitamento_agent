@@ -8,7 +8,7 @@ no ar) e checagem de fundamentação depois.
 import datetime as dt
 import time
 
-from app import caderneta, familia, guardrails, planos
+from app import caderneta, familia, guardrails, pagamentos, planos
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.lembretes import LEMBRETES, VERSAO_LEMBRETES
@@ -76,6 +76,7 @@ class MessagePipeline:
         known_users: KnownUsers | None = None,
         piloto: RegistroDoPiloto | None = None,
         memoria: MemoriaPersistente | None = None,
+        cobranca=None,
     ):
         self.settings = settings
         self.channel = channel
@@ -93,6 +94,7 @@ class MessagePipeline:
         self.permitidos = ler_lista_de_permitidos(settings.allowed_senders)
         self.piloto = piloto
         self.memoria = memoria
+        self.cobranca = cobranca
         # Quem já recebeu a pergunta de memória neste processo e ainda não
         # respondeu. Evita perguntar a cada mensagem; depois de um reinício,
         # pergunta de novo uma vez, o que é aceitável.
@@ -118,6 +120,15 @@ class MessagePipeline:
     @property
     def _lembretes_ligados(self) -> bool:
         return self._memoria_ligada and self.settings.lembretes_ativos
+
+    @property
+    def _cobranca_ligada(self) -> bool:
+        return (
+            self.cobranca is not None
+            and self.cobranca.ligada
+            and self.questionario is not None
+            and self.channel.name != "web"
+        )
 
     @property
     def _memoria_ligada(self) -> bool:
@@ -605,6 +616,8 @@ class MessagePipeline:
             guardrails.is_confirmation(text) or guardrails.is_delete_command(text)
         ):
             self._exclusoes_pendentes.pop(sender, None)
+            if self._cobranca_ligada:
+                self.cobranca.cancelar_em_silencio(sender)
             self._na_memoria("apagar_tudo", sender)
             self._forget(sender)
             self.channel.send_text(sender, guardrails.deleted_message())
@@ -625,6 +638,8 @@ class MessagePipeline:
             # Nada guardado nem autorizado: só a memória curta, que se perde de
             # qualquer jeito. Ainda assim passa pelo banco, que é idempotente:
             # se a leitura acima falhou, a exclusão não pode ficar pela metade.
+            if apagar and self._cobranca_ligada:
+                self.cobranca.cancelar_em_silencio(sender)
             if self._memoria_ligada:
                 self._na_memoria("apagar_tudo", sender)
             self._forget(sender)
@@ -633,10 +648,28 @@ class MessagePipeline:
             )
             return "apagou_tudo" if apagar else "opt_out"
 
+        if self._cobranca_ligada and guardrails.is_subscribe_command(text):
+            try:
+                resposta = self.cobranca.assinar(sender, self.questionario._hoje())
+            except Exception as exc:  # noqa: BLE001 - banco fora do ar
+                log.error("assinar falhou: %s", exc)
+                resposta = pagamentos.MENSAGEM_INDISPONIVEL
+            self.channel.send_text(sender, resposta)
+            return "assinar"
+
+        if self._cobranca_ligada and guardrails.is_cancel_subscription_command(text):
+            try:
+                resposta = self.cobranca.cancelar(sender)
+            except Exception as exc:  # noqa: BLE001
+                log.error("cancelar assinatura falhou: %s", exc)
+                resposta = fallback_message()
+            self.channel.send_text(sender, resposta)
+            return "cancelar_assinatura"
+
         if guardrails.is_plan_command(text):
             situacao = self._situacao_do_plano(sender)
             if situacao is not None:
-                self.channel.send_text(sender, planos.mensagem_meu_plano(situacao))
+                self.channel.send_text(sender, planos.mensagem_meu_plano(situacao, self._cobranca_ligada))
                 return "meu_plano"
 
         if guardrails.is_my_data_command(text):

@@ -138,6 +138,16 @@ services:
       # "true" quando o piloto acabar; até lá vale o limite diário do piloto.
       - key: PLANOS_ATIVOS
         value: "false"
+      # Cobrança do LactAI Plus (app/pagamentos.py), em nome da Watanabe AI
+      # Tech. A chave fica só no painel do Render. "producao" só depois de
+      # testar no sandbox, junto com a chave da conta real.
+      - key: ASAAS_API_KEY
+        sync: false
+      - key: ASAAS_AMBIENTE
+        value: sandbox
+      # Senha dos avisos de pagamento; o serviço a cadastra no Asaas sozinho.
+      - key: ASAAS_WEBHOOK_TOKEN
+        generateValue: true
 
 databases:
   # Memória do cuidador(a) e diário do bebê. Plano pago: backup diário.

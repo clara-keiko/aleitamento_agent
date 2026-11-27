@@ -490,6 +490,18 @@ def is_plan_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in PLAN_KEYWORDS
 
 
+SUBSCRIBE_KEYWORDS = {"assinar", "quero assinar", "assinar plus", "assinar lactai plus", "assinatura"}
+CANCEL_SUBSCRIPTION_KEYWORDS = {"cancelar assinatura", "cancelar a assinatura", "cancelar plano", "cancelar plus"}
+
+
+def is_subscribe_command(text: str) -> bool:
+    return normalize(text).strip(" .!?") in SUBSCRIBE_KEYWORDS
+
+
+def is_cancel_subscription_command(text: str) -> bool:
+    return normalize(text).strip(" .!?") in CANCEL_SUBSCRIPTION_KEYWORDS
+
+
 FAMILY_KEYWORDS = {"familia", "modo familia", "minha familia"}
 LEAVE_FAMILY_KEYWORDS = {"sair da familia"}
 

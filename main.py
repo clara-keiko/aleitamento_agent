@@ -33,6 +33,7 @@ from app.lembretes import LembretesDeVacina
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
 from app.memoria_persistente import MemoriaPersistente
+from app.pagamentos import Cobranca, token_valido
 from app.piloto import (
     AUTORIZADO,
     BRASILIA,
@@ -90,7 +91,11 @@ def _abrir_memoria() -> MemoriaPersistente | None:
 
 
 memoria = _abrir_memoria()
-pipeline = MessagePipeline(settings, channel, engine, piloto=piloto, memoria=memoria)
+# Cobrança do LactAI Plus pelo Asaas; desligada sem ASAAS_API_KEY.
+cobranca = Cobranca(settings, memoria)
+pipeline = MessagePipeline(
+    settings, channel, engine, piloto=piloto, memoria=memoria, cobranca=cobranca
+)
 
 # Protótipo web: mesmo motor, mesmo pipeline, canal diferente. Ganha o próprio
 # MessagePipeline só para que histórico e rate limit do navegador não se
@@ -157,7 +162,9 @@ if isinstance(channel, MetaCloudChannel):
     canal_meta, pipeline_meta = channel, pipeline
 elif settings.web_ready and not _faltando_para_meta():
     canal_meta = MetaCloudChannel(settings)
-    pipeline_meta = MessagePipeline(settings, canal_meta, engine, piloto=piloto, memoria=memoria)
+    pipeline_meta = MessagePipeline(
+        settings, canal_meta, engine, piloto=piloto, memoria=memoria, cobranca=cobranca
+    )
 else:
     canal_meta = pipeline_meta = None
 
@@ -212,6 +219,29 @@ if memoria is not None:
     @app.on_event("shutdown")
     def _desligar_retencao() -> None:
         zelador.parar()
+
+
+ROTA_ASAAS = "/pagamentos/asaas"
+
+
+def _registrar_aviso_do_asaas() -> None:
+    """Cadastra o aviso de pagamentos no Asaas sozinho, na subida."""
+    try:
+        resultado = cobranca.asaas.garantir_webhook(
+            settings.url_publica.rstrip("/") + ROTA_ASAAS,
+            settings.asaas_webhook_token,
+            "clara@watanabeaitech.com",
+        )
+        log.info("asaas (%s): aviso de pagamentos %s", settings.asaas_ambiente, resultado)
+    except Exception as exc:  # noqa: BLE001
+        log.error("asaas: não consegui cadastrar o aviso de pagamentos: %s", exc)
+
+
+if cobranca.ligada and settings.asaas_webhook_token and settings.url_publica:
+
+    @app.on_event("startup")
+    def _ligar_asaas() -> None:
+        threading.Thread(target=_registrar_aviso_do_asaas, daemon=True).start()
 
 
 if settings.provider == PROVIDER_EVOLUTION and settings.ready:
@@ -797,6 +827,35 @@ async def receber_webhook_meta(request: Request, background: BackgroundTasks) ->
 
     for message in canal_meta.parse_webhook(payload):
         background.add_task(_processar_com_seguranca, pipeline_meta, message)
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
+@app.post(ROTA_ASAAS)
+async def receber_aviso_do_asaas(request: Request, background: BackgroundTasks) -> Response:
+    """Aviso de pagamento do Asaas. Responde 200 sempre que o aviso é
+    autêntico: erro aqui faz o Asaas pausar a fila de avisos inteira."""
+    if not cobranca.ligada:
+        return JSONResponse({"status": "desligado"}, status_code=404)
+    if not token_valido(request.headers.get("asaas-access-token"), settings.asaas_webhook_token):
+        log.warning("aviso do Asaas com token inválido; descartando")
+        return JSONResponse({"status": "forbidden"}, status_code=401)
+    try:
+        aviso = json.loads(await request.body() or b"{}")
+    except (ValueError, UnicodeDecodeError):
+        return JSONResponse({"status": "ignored"}, status_code=200)
+    if not isinstance(aviso, dict):
+        return JSONResponse({"status": "ignored"}, status_code=200)
+
+    hoje = dt.datetime.now(BRASILIA).date()
+    try:
+        recado = cobranca.processar_aviso(aviso, hoje)
+    except Exception as exc:  # noqa: BLE001
+        # Banco fora do ar: 500 faz o Asaas reenviar depois. Nada foi marcado.
+        log.error("asaas: falha ao processar aviso: %s", exc)
+        return JSONResponse({"status": "erro"}, status_code=500)
+    if recado:
+        destino = canal_meta or channel
+        background.add_task(destino.send_text, *recado)
     return JSONResponse({"status": "ok"}, status_code=200)
 
 

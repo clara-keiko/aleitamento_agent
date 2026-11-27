@@ -88,6 +88,8 @@ def situacao(memoria, settings, numero: str, agora: dt.datetime) -> Situacao:
 # ----------------------------------------------------------------------
 
 def _como_assinar(settings) -> str:
+    if settings.asaas_api_key:
+        return "Para assinar, mande *ASSINAR*."
     if settings.link_assinatura:
         return f"Para assinar: {settings.link_assinatura}"
     return "Para assinar, escreva para clara@watanabeaitech.com."
@@ -126,10 +128,16 @@ def aviso_de_restantes(s: Situacao) -> str:
     return f"\n\n_{'Resta' if restantes == 1 else 'Restam'} {restantes} pergunta{'s' if restantes > 1 else ''} do plano gratuito este mês._"
 
 
-def mensagem_meu_plano(s: Situacao) -> str:
+def mensagem_meu_plano(s: Situacao, assinatura_ligada: bool = False) -> str:
     return (
         f"📋 *Seu plano: {s.plano.rotulo}*\n"
         f"• {s.usados_mes} de {s.plano.mensal} perguntas usadas neste ciclo\n"
         f"• Renova em {s.renova_em:%d/%m/%Y}\n\n"
         "Emergências, cumprimentos e comandos não contam."
+        + (
+            "\n\nPara assinar o LactAI Plus: *ASSINAR*."
+            if s.plano.nome == GRATUITO and assinatura_ligada else
+            "\n\nPara cancelar a renovação: *CANCELAR ASSINATURA*."
+            if s.plano.nome == PLUS and assinatura_ligada else ""
+        )
     )

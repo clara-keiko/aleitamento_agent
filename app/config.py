@@ -193,6 +193,16 @@ class Settings:
     calendario_sus_ativo: bool = field(
         default_factory=lambda: _env_bool("CALENDARIO_SUS_ATIVO", True)
     )
+    # Planos e limites por pessoa (ver app/planos.py). Desligado: vale o
+    # limite diário do piloto, igual para todos.
+    planos_ativos: bool = field(default_factory=lambda: _env_bool("PLANOS_ATIVOS", False))
+    limite_mensal_gratuito: int = field(default_factory=lambda: _env_int("LIMITE_MENSAL_GRATUITO", 10))
+    limite_diario_gratuito: int = field(default_factory=lambda: _env_int("LIMITE_DIARIO_GRATUITO", 5))
+    limite_mensal_assinante: int = field(default_factory=lambda: _env_int("LIMITE_MENSAL_ASSINANTE", 150))
+    limite_diario_assinante: int = field(default_factory=lambda: _env_int("LIMITE_DIARIO_ASSINANTE", 30))
+    preco_assinatura: str = field(default_factory=lambda: _env("PRECO_ASSINATURA", "R$ 29,90"))
+    # Link de pagamento (Mercado Pago etc.). Vazio: a mensagem indica o e-mail.
+    link_assinatura: str = field(default_factory=lambda: _env("LINK_ASSINATURA"))
     # Lembrete de vacina no mesversário. Só liga depois de o modelo de
     # mensagem ser aprovado pela Meta (ver docs/LEMBRETES.md).
     lembretes_ativos: bool = field(default_factory=lambda: _env_bool("LEMBRETES_ATIVOS", False))

@@ -319,6 +319,50 @@ class MemoriaPersistente:
                  tokens_entrada, tokens_saida, buscas_web, self._agora()),
             )
 
+    def usos_entre(self, numero: str, inicio: dt.datetime, fim: dt.datetime) -> int:
+        with self._conectar() as con:
+            return con.execute(
+                "SELECT count(*) FROM uso_do_modelo"
+                " WHERE telefone_hash = %s AND criado_em >= %s AND criado_em < %s",
+                (_chave(numero), inicio, fim),
+            ).fetchone()[0]
+
+    # ------------------------------------------------------------------
+    # Assinaturas
+    # ------------------------------------------------------------------
+    def assinatura(self, numero: str) -> dict | None:
+        with self._conectar() as con:
+            linha = con.execute(
+                "SELECT plano, inicio, pago_ate, origem FROM assinaturas WHERE telefone_hash = %s",
+                (_chave(numero),),
+            ).fetchone()
+        if linha is None:
+            return None
+        return {"plano": linha[0], "inicio": linha[1], "pago_ate": linha[2], "origem": linha[3]}
+
+    def definir_assinatura(
+        self, numero: str, plano: str, inicio: dt.date, pago_ate: dt.date, origem: str = "manual",
+    ) -> None:
+        """Ativa ou renova. Renovação mantém o dia de início (o ciclo)."""
+        with self._conectar() as con:
+            con.execute(
+                "INSERT INTO assinaturas (telefone_hash, plano, inicio, pago_ate, origem)"
+                " VALUES (%s, %s, %s, %s, %s)"
+                " ON CONFLICT (telefone_hash) DO UPDATE SET plano = excluded.plano,"
+                "  pago_ate = excluded.pago_ate, origem = excluded.origem, atualizado_em = now()",
+                (_chave(numero), plano, inicio, pago_ate, origem),
+            )
+
+    def cancelar_assinatura(self, numero: str) -> None:
+        with self._conectar() as con:
+            con.execute("DELETE FROM assinaturas WHERE telefone_hash = %s", (_chave(numero),))
+
+    def contar_assinaturas_ativas(self, hoje: dt.date) -> int:
+        with self._conectar() as con:
+            return con.execute(
+                "SELECT count(*) FROM assinaturas WHERE pago_ate >= %s", (hoje,)
+            ).fetchone()[0]
+
     def resumo_de_uso(self, dias: int = 30) -> dict:
         """Custo real nos últimos `dias`: por tipo e por pessoa."""
         desde = self._agora() - dt.timedelta(days=dias)

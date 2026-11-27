@@ -7,6 +7,7 @@ forma síncrona, a mãe recebia a mesma resposta duas ou três vezes.
 """
 
 import base64
+import datetime as dt
 import hashlib
 import hmac
 import html
@@ -34,6 +35,7 @@ from app.logging_utils import configure_logging, get_logger
 from app.memoria_persistente import MemoriaPersistente
 from app.piloto import (
     AUTORIZADO,
+    BRASILIA,
     CODIGO_INVALIDO,
     ESGOTADO,
     JA_AUTORIZADO,
@@ -391,7 +393,70 @@ def painel_do_piloto(request: Request) -> Response:
 <p class="sub">Limite por pessoa: {limite or "sem limite"} perguntas por dia.</p>
 <table><tr><th>Convite</th><th>Vagas</th><th>Link para enviar</th></tr>{linhas_convite}</table>
 {_bloco_de_custo()}
+{_bloco_de_assinaturas()}
 {_formulario_liberar(r["convites"])}""")
+
+
+def _bloco_de_assinaturas() -> str:
+    if memoria is None:
+        return ""
+    hoje = dt.datetime.now(BRASILIA).date()
+    try:
+        ativas = memoria.contar_assinaturas_ativas(hoje)
+    except Exception as exc:  # noqa: BLE001
+        log.error("painel: assinaturas indisponíveis: %s", exc)
+        return ""
+    estado = "ligados" if settings.planos_ativos else "desligados (vale o limite diário do piloto)"
+    padrao = hoje + dt.timedelta(days=31)
+    return f"""
+<h2>Planos e assinaturas</h2>
+<p class="sub">Limites por plano: {html.escape(estado)}. Gratuito:
+{settings.limite_mensal_gratuito}/mês e {settings.limite_diario_gratuito}/dia. Acompanhada:
+{settings.limite_mensal_assinante}/mês e {settings.limite_diario_assinante}/dia.
+Assinaturas ativas: <b>{ativas}</b>.</p>
+<form method="post" action="/admin/piloto/assinatura">
+<p>Número: <input name="numero" placeholder="(21) 99999-0000"></p>
+<p>Pago até (inclusive): <input name="pago_ate" type="date" value="{padrao:%Y-%m-%d}"></p>
+<button type="submit" name="acao" value="ativar">Ativar ou renovar Acompanhada</button>
+<button type="submit" name="acao" value="cancelar">Cancelar assinatura</button>
+</form>"""
+
+
+@app.post("/admin/piloto/assinatura", response_class=HTMLResponse)
+async def gerenciar_assinatura(request: Request) -> Response:
+    negado = _negar_admin(request)
+    if negado:
+        return negado
+    voltar = '<p><a href="/admin/piloto">← Voltar ao painel</a></p>'
+    if memoria is None:
+        return _pagina_admin("Piloto LactAI", "<p>Sem banco configurado.</p>" + voltar)
+
+    formulario = dict(parse_qsl((await request.body()).decode("utf-8", "replace")))
+    numeros = ler_numeros(formulario.get("numero", ""))
+    numero = numeros[0] if numeros else ""
+    if not numero:
+        return _pagina_admin("Piloto LactAI", "<p>Número não reconhecido.</p>" + voltar)
+    final = html.escape(numero[-4:])
+
+    if formulario.get("acao") == "cancelar":
+        memoria.cancelar_assinatura(numero)
+        log.info("assinatura cancelada pelo painel")
+        return _pagina_admin("Piloto LactAI", f"<p>Assinatura de …{final} cancelada: volta ao gratuito.</p>" + voltar)
+
+    try:
+        pago_ate = dt.date.fromisoformat(formulario.get("pago_ate", ""))
+    except ValueError:
+        return _pagina_admin("Piloto LactAI", "<p>Data inválida.</p>" + voltar)
+    hoje = dt.datetime.now(BRASILIA).date()
+    atual = memoria.assinatura(numero)
+    # Renovação mantém o dia de início, que é a âncora do ciclo mensal.
+    inicio = atual["inicio"] if atual and atual["pago_ate"] >= hoje else hoje
+    memoria.definir_assinatura(numero, "acompanhada", inicio, pago_ate)
+    log.info("assinatura ativada pelo painel")
+    return _pagina_admin("Piloto LactAI", (
+        f"<p>Plano Acompanhada ativo para …{final}, de {inicio:%d/%m/%Y} até "
+        f"{pago_ate:%d/%m/%Y}.</p>" + voltar
+    ))
 
 
 _NOMES_DE_USO = {"pergunta": "Pergunta", "vacina": "Vacina (busca SUS/SBIm)",

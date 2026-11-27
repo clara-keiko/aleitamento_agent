@@ -483,6 +483,13 @@ def reminders_need_profile_message() -> str:
     )
 
 
+PLAN_KEYWORDS = {"plano", "meu plano", "minhas perguntas", "quantas perguntas tenho"}
+
+
+def is_plan_command(text: str) -> bool:
+    return normalize(text).strip(" .!?") in PLAN_KEYWORDS
+
+
 def is_my_data_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
 

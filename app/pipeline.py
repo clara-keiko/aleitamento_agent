@@ -7,7 +7,7 @@ no ar) e checagem de fundamentação depois.
 
 import time
 
-from app import caderneta, guardrails
+from app import caderneta, guardrails, planos
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
 from app.lembretes import LEMBRETES, VERSAO_LEMBRETES
@@ -100,6 +100,9 @@ class MessagePipeline:
         # Leitura da caderneta esperando "1" para ser gravada:
         # número -> (bebê, vacinas lidas, quando).
         self._cadernetas_pendentes: dict[str, tuple] = {}
+        # Situação do plano medida antes da pergunta, para o aviso de
+        # "restam N" no fim da resposta.
+        self._situacoes: dict = {}
         # Quem recebeu a pergunta de lembretes e ainda não respondeu.
         self._lembretes_pendentes: set[str] = set()
         # Dado solto esperando "1": número -> (tipo, valor, bebê, quando).
@@ -299,6 +302,9 @@ class MessagePipeline:
         reply += nota_remedio
         if sobre_vacina and consentiu:
             reply += self._sugestao_de_foto(message.sender)
+        situacao = self._situacoes.pop(message.sender, None)
+        if situacao is not None:
+            reply += planos.aviso_de_restantes(situacao)
 
         desfecho = "respondido_com_nota" if risk.needs_safety_note else "respondido"
 
@@ -490,6 +496,12 @@ class MessagePipeline:
             )
             return "apagou_tudo" if apagar else "opt_out"
 
+        if guardrails.is_plan_command(text):
+            situacao = self._situacao_do_plano(sender)
+            if situacao is not None:
+                self.channel.send_text(sender, planos.mensagem_meu_plano(situacao))
+                return "meu_plano"
+
         if guardrails.is_my_data_command(text):
             dados = self._na_memoria("meus_dados", sender, padrao={}) if self._memoria_ligada else {}
             if dados:
@@ -625,14 +637,37 @@ class MessagePipeline:
             + self._pergunta_de_memoria(numero),
         )
 
-    def _checar_limites(self, sender: str) -> str | None:
-        if self.piloto is None:
+    def _situacao_do_plano(self, sender: str):
+        """Plano e uso no ciclo; None sem planos, no web ou com banco fora
+        (banco fora não bloqueia ninguém: o teto global de gasto segue)."""
+        if not self.settings.planos_ativos or self.memoria is None or self.channel.name == "web":
+            return None
+        try:
+            return planos.situacao(self.memoria, self.settings, sender, self.questionario._agora())
+        except Exception as exc:  # noqa: BLE001
+            log.error("planos: não consegui consultar o uso: %s", exc)
             return None
 
-        orcamento = self.settings.orcamento_mensal_usd
-        if orcamento > 0 and self.piloto.gasto_do_mes() >= orcamento:
-            self.channel.send_text(sender, guardrails.budget_exhausted_message())
-            return "orcamento_esgotado"
+    def _checar_limites(self, sender: str) -> str | None:
+        if self.piloto is not None:
+            orcamento = self.settings.orcamento_mensal_usd
+            if orcamento > 0 and self.piloto.gasto_do_mes() >= orcamento:
+                self.channel.send_text(sender, guardrails.budget_exhausted_message())
+                return "orcamento_esgotado"
+
+        situacao = self._situacao_do_plano(sender)
+        if situacao is not None:
+            if situacao.usados_dia >= situacao.plano.diario:
+                self.channel.send_text(sender, planos.mensagem_limite_diario(situacao))
+                return "limite_diario"
+            if situacao.usados_mes >= situacao.plano.mensal:
+                self.channel.send_text(sender, planos.mensagem_limite_mensal(situacao, self.settings))
+                return "limite_mensal"
+            self._situacoes[sender] = situacao
+            return None
+
+        if self.piloto is None:
+            return None
 
         limite = self.settings.limite_diario_por_pessoa
         if (

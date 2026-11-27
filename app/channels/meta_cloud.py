@@ -127,6 +127,39 @@ class MetaCloudChannel(Channel):
     # ------------------------------------------------------------------
     # Saída
     # ------------------------------------------------------------------
+    def send_template(self, to: str, nome: str, idioma: str, parametros: list[str]) -> bool:
+        """Modelo aprovado pela Meta: o único jeito de escrever fora da janela
+        de 24 h desde a última mensagem da pessoa."""
+        url = (
+            f"https://graph.facebook.com/{self.settings.graph_version}"
+            f"/{self.settings.phone_number_id}/messages"
+        )
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": nome,
+                "language": {"code": idioma},
+                "components": [{
+                    "type": "body",
+                    "parameters": [{"type": "text", "text": p} for p in parametros],
+                }],
+            },
+        }
+        headers = {
+            "Authorization": f"Bearer {self.settings.whatsapp_token}",
+            "Content-Type": "application/json",
+        }
+        response = post_with_retry(url, headers=headers, json=payload, timeout=TIMEOUT)
+        if response is None or response.status_code >= 400:
+            log.error(
+                "modelo %s recusado para %s: %s", nome, pseudonymize(to),
+                "sem resposta" if response is None else f"HTTP {response.status_code} {response.text[:300]}",
+            )
+            return False
+        return True
+
     def send_text(self, to: str, body: str) -> bool:
         url = (
             f"https://graph.facebook.com/{self.settings.graph_version}"

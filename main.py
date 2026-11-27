@@ -28,6 +28,7 @@ from app.channels.meta_cloud import MetaCloudChannel
 from app.channels.web import WebChannel
 from app.config import PROVIDER_EVOLUTION, PROVIDER_TWILIO, settings
 from app.cripto import ChaveAusente, Cofre
+from app.lembretes import LembretesDeVacina
 from app.llm import AssistantEngine
 from app.logging_utils import configure_logging, get_logger
 from app.memoria_persistente import MemoriaPersistente
@@ -176,6 +177,21 @@ def _ligar_calendario() -> None:
 @app.on_event("shutdown")
 def _desligar_calendario() -> None:
     atualizador_do_calendario.parar()
+
+
+# Lembretes de vacina: uma rodada por hora; só manda entre 9h e 19h. Só com
+# o modelo de mensagem aprovado pela Meta (LEMBRETES_ATIVOS) e no canal oficial.
+if memoria is not None and settings.lembretes_ativos and isinstance(channel, MetaCloudChannel):
+    lembretes = LembretesDeVacina(memoria, engine, channel, settings)
+    tarefa_de_lembretes = TarefaPeriodica("lembretes", lembretes.rodar, intervalo_s=3600)
+
+    @app.on_event("startup")
+    def _ligar_lembretes() -> None:
+        tarefa_de_lembretes.iniciar()
+
+    @app.on_event("shutdown")
+    def _desligar_lembretes() -> None:
+        tarefa_de_lembretes.parar()
 
 
 if memoria is not None:

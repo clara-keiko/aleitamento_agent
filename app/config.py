@@ -193,6 +193,13 @@ class Settings:
     calendario_sus_ativo: bool = field(
         default_factory=lambda: _env_bool("CALENDARIO_SUS_ATIVO", True)
     )
+    # Lembrete de vacina no mesversário. Só liga depois de o modelo de
+    # mensagem ser aprovado pela Meta (ver docs/LEMBRETES.md).
+    lembretes_ativos: bool = field(default_factory=lambda: _env_bool("LEMBRETES_ATIVOS", False))
+    template_lembrete_vacina: str = field(
+        default_factory=lambda: _env("TEMPLATE_LEMBRETE_VACINA", "lembrete_vacina_mesversario")
+    )
+    idioma_template: str = field(default_factory=lambda: _env("IDIOMA_TEMPLATE", "pt_BR"))
     # Busca na web das perguntas de vacina (web_search): US$ 10 por mil.
     custo_busca_web_usd: float = field(
         default_factory=lambda: _env_float("CUSTO_BUSCA_WEB_USD", 0.01)

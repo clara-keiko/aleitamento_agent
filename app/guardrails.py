@@ -428,6 +428,61 @@ def is_profile_command(text: str) -> bool:
     return normalize(text).strip(" .!") in PROFILE_KEYWORDS
 
 
+REMINDER_STOP = {"parar lembretes", "parar lembrete", "cancelar lembretes", "sem lembretes"}
+REMINDER_START = {"lembretes", "lembrete", "quero lembretes", "ativar lembretes"}
+
+
+def is_reminder_stop(text: str) -> bool:
+    return normalize(text).strip(" .!") in REMINDER_STOP
+
+
+def is_reminder_start(text: str) -> bool:
+    return normalize(text).strip(" .!") in REMINDER_START
+
+
+def reminders_question() -> str:
+    return (
+        "📅 *Quer que eu te avise das vacinas?*\n\n"
+        "No dia do mesversário em que houver vacina prevista no calendário do "
+        "SUS, eu te mando uma mensagem. Para isso, guardo o seu número, "
+        "protegido. Para parar, é só mandar *PARAR LEMBRETES*.\n\n"
+        "*1* – Quero\n*2* – Não precisa"
+    )
+
+
+def reminders_yes_message() -> str:
+    return (
+        "Combinado! 📅 No mesversário em que houver vacina prevista, eu te "
+        "aviso. Para parar, mande *PARAR LEMBRETES*."
+    )
+
+
+def reminders_no_message() -> str:
+    return "Tudo bem, sem lembretes. Se mudar de ideia, mande *LEMBRETES*."
+
+
+def reminders_stopped_message() -> str:
+    return (
+        "Pronto, não mando mais lembretes de vacina, e apaguei o seu número "
+        "que estava guardado para isso. Se quiser de volta, mande *LEMBRETES*."
+    )
+
+
+def reminders_need_consent_message() -> str:
+    return (
+        "Consigo te avisar das vacinas no mesversário — mas, para isso, preciso "
+        "guardar a data de nascimento do bebê, e isso pede a sua autorização. "
+        "Mande *GUARDAR* para ver como funciona."
+    )
+
+
+def reminders_need_profile_message() -> str:
+    return (
+        "Para eu te avisar das vacinas, preciso saber a data de nascimento do "
+        "bebê. Mande *PERFIL* para responder rapidinho."
+    )
+
+
 def is_my_data_command(text: str) -> bool:
     return normalize(text).strip(" .!?") in MY_DATA_KEYWORDS
 

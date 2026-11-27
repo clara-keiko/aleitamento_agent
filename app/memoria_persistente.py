@@ -251,6 +251,60 @@ class MemoriaPersistente:
         }
 
     # ------------------------------------------------------------------
+    # Lembretes de vacina
+    # ------------------------------------------------------------------
+    def salvar_telefone_para_lembretes(self, numero: str) -> None:
+        """Telefone cifrado: só existe para quem pediu lembrete (precisa de
+        destino). O número é guardado como o WhatsApp o entregou."""
+        self._atualizar_cuidador(numero, "telefone_cifrado = %s", (self.cofre.cifrar(numero),))
+
+    def apagar_telefone(self, numero: str) -> None:
+        with self._conectar() as con:
+            con.execute(
+                "UPDATE cuidadores SET telefone_cifrado = NULL WHERE telefone_hash = %s",
+                (_chave(numero),),
+            )
+
+    def lembretes_do_dia(self, hoje: dt.date) -> list[dict]:
+        """Bebês com mesversário hoje, de quem pediu lembrete e ainda não
+        recebeu (nem foi conferido) o desta idade."""
+        from app.lembretes import mesversario
+
+        with self._conectar() as con:
+            linhas = con.execute(
+                "SELECT b.id, b.data_nascimento, b.sexo, c.telefone_cifrado"
+                " FROM bebes b JOIN cuidadores c ON c.id = b.cuidador_id"
+                " WHERE c.status = 'ativa' AND c.telefone_cifrado IS NOT NULL"
+                " AND c.relacao IN ('mae','pai','responsavel_legal')"
+                " AND (SELECT k.aceito AND k.revogado_em IS NULL FROM consentimentos k"
+                "      WHERE k.telefone_hash = c.telefone_hash AND k.finalidade = 'lembretes'"
+                "      ORDER BY k.decidido_em DESC, k.id DESC LIMIT 1)",
+            ).fetchall()
+            feitos = {
+                (str(b), m) for b, m in con.execute(
+                    "SELECT bebe_id, idade_meses FROM lembretes"
+                ).fetchall()
+            }
+        pendentes = []
+        for bebe_id, nascimento, sexo, telefone in linhas:
+            meses = mesversario(nascimento, hoje)
+            if meses is None or (str(bebe_id), meses) in feitos:
+                continue
+            pendentes.append({
+                "bebe_id": str(bebe_id), "idade_meses": meses, "sexo": sexo,
+                "telefone": self.cofre.decifrar(telefone),
+            })
+        return pendentes
+
+    def registrar_lembrete(self, bebe_id: str, idade_meses: int, status: str) -> None:
+        with self._conectar() as con:
+            con.execute(
+                "INSERT INTO lembretes (bebe_id, idade_meses, status) VALUES (%s, %s, %s)"
+                " ON CONFLICT (bebe_id, idade_meses) DO NOTHING",
+                (bebe_id, idade_meses, status),
+            )
+
+    # ------------------------------------------------------------------
     # Custo de uso (calibrar os limites por plano)
     # ------------------------------------------------------------------
     def registrar_uso(

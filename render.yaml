@@ -130,6 +130,10 @@ services:
       # "false" volta à memória curta sem apagar o que já foi guardado.
       - key: MEMORIA_ATIVA
         value: "true"
+      # Lembrete de vacina no mesversário. Só "true" depois de a Meta aprovar
+      # o modelo lembrete_vacina_mesversario (ver docs/LEMBRETES.md).
+      - key: LEMBRETES_ATIVOS
+        value: "false"
 
 databases:
   # Memória do cuidador(a) e diário do bebê. Plano pago: backup diário.

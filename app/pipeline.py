@@ -10,6 +10,7 @@ import time
 from app import caderneta, guardrails
 from app.channels.base import Channel, IncomingMessage
 from app.config import Settings
+from app.lembretes import LEMBRETES, VERSAO_LEMBRETES
 from app.llm import AssistantEngine, fallback_message
 from app.logging_utils import get_logger, pseudonymize
 from app.memoria_persistente import MemoriaPersistente
@@ -99,10 +100,16 @@ class MessagePipeline:
         # Leitura da caderneta esperando "1" para ser gravada:
         # número -> (bebê, vacinas lidas, quando).
         self._cadernetas_pendentes: dict[str, tuple] = {}
+        # Quem recebeu a pergunta de lembretes e ainda não respondeu.
+        self._lembretes_pendentes: set[str] = set()
         # Dado solto esperando "1": número -> (tipo, valor, bebê, quando).
         self._atualizacoes_pendentes: dict[str, tuple] = {}
         # Pedidos de exclusão esperando CONFIRMAR: número -> quando pediu.
         self._exclusoes_pendentes: dict[str, float] = {}
+
+    @property
+    def _lembretes_ligados(self) -> bool:
+        return self._memoria_ligada and self.settings.lembretes_ativos
 
     @property
     def _memoria_ligada(self) -> bool:
@@ -213,6 +220,8 @@ class MessagePipeline:
         if self.questionario and self.questionario.ativo(message.sender):
             seguinte = self._na_memoria_questionario(message.sender, text)
             if seguinte:
+                if not self.questionario.ativo(message.sender):
+                    seguinte += self._pergunta_de_lembretes(message.sender)
                 self.channel.send_text(message.sender, seguinte)
                 return "questionario"
 
@@ -320,6 +329,57 @@ class MessagePipeline:
             return True
         return bool(self.piloto and self.piloto.autorizado(sender))
 
+    def _lembretes_da_titular(self, message: IncomingMessage, text: str) -> str | None:
+        if not self._lembretes_ligados:
+            return None
+        sender = message.sender
+
+        if guardrails.is_reminder_stop(text):
+            self._lembretes_pendentes.discard(sender)
+            self._na_memoria(
+                "decidir", sender, False, message.message_id, LEMBRETES, VERSAO_LEMBRETES
+            )
+            self._na_memoria("apagar_telefone", sender)
+            self.channel.send_text(sender, guardrails.reminders_stopped_message())
+            return "lembretes_parados"
+
+        if sender in self._lembretes_pendentes:
+            resposta = guardrails.consent_answer(text)
+            if resposta is not None:
+                self._lembretes_pendentes.discard(sender)
+                self._na_memoria(
+                    "decidir", sender, resposta, message.message_id, LEMBRETES, VERSAO_LEMBRETES
+                )
+                if resposta:
+                    self._na_memoria("salvar_telefone_para_lembretes", sender)
+                    self.channel.send_text(sender, guardrails.reminders_yes_message())
+                    return "lembretes_aceitos"
+                self.channel.send_text(sender, guardrails.reminders_no_message())
+                return "lembretes_recusados"
+
+        if guardrails.is_reminder_start(text):
+            if not self._na_memoria("decisao", sender):
+                self.channel.send_text(sender, guardrails.reminders_need_consent_message())
+                return "lembretes_sem_autorizacao"
+            if not (self._na_memoria("perfil", sender) or {}).get("bebes"):
+                self.channel.send_text(sender, guardrails.reminders_need_profile_message())
+                return "lembretes_sem_bebe"
+            self._lembretes_pendentes.add(sender)
+            self.channel.send_text(sender, guardrails.reminders_question())
+            return "pergunta_de_lembretes"
+        return None
+
+    def _pergunta_de_lembretes(self, sender: str) -> str:
+        """Depois do questionário com bebê: oferecer os lembretes, uma vez."""
+        if not self._lembretes_ligados or sender in self._lembretes_pendentes:
+            return ""
+        if not (self._na_memoria("perfil", sender) or {}).get("bebes"):
+            return ""
+        if self._na_memoria("decisao", sender, LEMBRETES, padrao=False) is not None:
+            return ""
+        self._lembretes_pendentes.add(sender)
+        return "\n\n" + guardrails.reminders_question()
+
     def _pergunta_de_memoria(self, sender: str) -> str:
         """A pergunta de consentimento, para ir no fim de uma mensagem.
 
@@ -381,6 +441,10 @@ class MessagePipeline:
                     return "erro_memoria"
                 self.channel.send_text(sender, "Atualizado! ✅ Para ver tudo, *MEUS DADOS*.")
                 return "perfil_atualizado"
+
+        lembrete = self._lembretes_da_titular(message, text)
+        if lembrete:
+            return lembrete
 
         # "parar" no meio do questionário é parar o questionário, não sair do
         # serviço: precisa ser visto antes do SAIR/PARAR geral.
@@ -719,6 +783,7 @@ class MessagePipeline:
             self.questionario.encerrar(sender)
         self._cadernetas_pendentes.pop(sender, None)
         self._atualizacoes_pendentes.pop(sender, None)
+        self._lembretes_pendentes.discard(sender)
 
     def _resolve_text(self, message: IncomingMessage) -> str | None:
         """Texto da mensagem, transcrevendo áudio quando necessário."""
